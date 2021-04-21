@@ -40,8 +40,8 @@ async fn main() {
         } => {
             println!("Import");
             let driver = drivers::create(&exchange, &settings).expect("exchange not found");
-            let candles = driver.get_candles(&symbol, &start.and_hms(0,0,0), &end.and_hms(0,0,0)).await;
-            println!("{:?}", candles);
+            let candles = driver.get_candles(&symbol, &start.and_hms(0,0,0)).await;
+            //println!("{:?}", candles);
             //let storage = storage::Storage::new().await;
         }
         Trade::Backtest {

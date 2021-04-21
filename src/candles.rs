@@ -11,6 +11,7 @@ pub struct Candle {
     pub close: f64,
     pub low: f64,
     pub high: f64,
+    pub volume :f64,
 }
 
 impl fmt::Display for Candle {

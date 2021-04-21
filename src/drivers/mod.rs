@@ -6,7 +6,7 @@ use std::vec::Vec;
 
 #[async_trait]
 pub trait Importer: std::fmt::Debug {
-    async fn get_candles(&self, sym: &str, start: &NaiveDateTime, end: &NaiveDateTime) -> Vec<candles::Candle>;
+    async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle>;
 }
 
 pub fn create(exchange: &str, config: &Settings) -> Result<Box<dyn Importer>, super::Error> {
@@ -23,7 +23,8 @@ pub mod binance {
     use super::candles;
     use async_trait::async_trait;
     use chrono::NaiveDateTime;
-    use reqwest::{multipart::Form, Client};
+    use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, HOST, USER_AGENT};
+    use reqwest::Client;
 
     #[derive(Debug, serde::Deserialize)]
     struct Candle {
@@ -34,7 +35,7 @@ pub mod binance {
         close: String,
         volume: String,
         close_time: u64,
-        quote_asset_volume : String,
+        quote_asset_volume: String,
         number_of_trades: u32,
         ignore1: String,
         ignore2: String,
@@ -43,6 +44,7 @@ pub mod binance {
 
     #[derive(Debug)]
     pub struct Driver {
+        default_headers: HeaderMap,
         url: String,
         api_key: String,
         client: Client,
@@ -50,8 +52,14 @@ pub mod binance {
 
     impl Driver {
         pub fn new(api_key: &str) -> Driver {
+            let mut default_headers = HeaderMap::new();
+            default_headers.insert(USER_AGENT, HeaderValue::from_static("trader/0.0.1"));
+            default_headers.insert(HOST, HeaderValue::from_static("api.binance.com"));
+            default_headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
             Driver {
+                default_headers,
                 url: String::from("https://api.binance.com"),
+                //url: String::from("http://localhost:8080"),
                 client: Client::new(),
                 api_key: String::from(api_key),
             }
@@ -60,28 +68,37 @@ pub mod binance {
 
     #[async_trait]
     impl super::Importer for Driver {
-        async fn get_candles(&self, sym: &str, start: &NaiveDateTime, end: &NaiveDateTime) -> Vec<candles::Candle> {
-            let symbol = String::from(sym);
-            let form = Form::new()
-                .text("symbol", symbol)
-                .text("interval", "1m")
-                .text("startTime", format!("{}000", start.timestamp()))
-                .text("endTime", format!("{}000", end.timestamp()))
-                .text("limit", "1000");
+        async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle> {
             let url = self.url.clone() + "/api/v3/klines";
-            let _response = self
+            let request = self
                 .client
                 .get(url)
+                .headers(self.default_headers.clone())
                 .header("X-MBX-APIKEY", &self.api_key)
-                .multipart(form)
+                .query(&[
+                    ("symbol", sym),
+                    ("interval", "1m"),
+                    ("startTime", &format!("{}000", start.timestamp())),
+                    ("limit", "1000"),
+                    //("limit", "10"),
+                ]);
+            request
                 .send()
                 .await
-                .expect("Binance klines request")
-                .text()
-                //.json::<Vec<Vec<String>>>()
-                .await;
-            println!("{:?}", _response);
-            Vec::new()
+                .expect("in send binance klines request")
+                .json::<Vec<Candle>>()
+                .await
+                .expect("in json<Vec<Candle>>")
+                .iter()
+                .map(|cnd| candles::Candle {
+                    open: cnd.open.parse::<f64>().expect("in cnd.open"),
+                    low: cnd.low.parse::<f64>().expect("in cnd.low"),
+                    high: cnd.high.parse::<f64>().expect("in cnd.high"),
+                    close: cnd.close.parse::<f64>().expect("in cnd.close"),
+                    volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
+                    tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
+                })
+                .collect()
         }
     }
 }
