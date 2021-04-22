@@ -3,10 +3,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use trader::*;
 
-#[derive(Debug)]
-enum Storage {
-    SQLite,
-}
 #[derive(Debug, StructOpt)]
 enum Trade {
     #[structopt(about = "import candles from exchage")]
@@ -41,8 +37,7 @@ async fn main() {
             println!("Import");
             let driver = drivers::create(&exchange, &settings).expect("exchange not found");
             let candles = driver.get_candles(&symbol, &start.and_hms(0,0,0)).await;
-            //println!("{:?}", candles);
-            //let storage = storage::Storage::new().await;
+            let storage = storage::Candles::new(&settings.candle_storage).await;
         }
         Trade::Backtest {
             strategy,

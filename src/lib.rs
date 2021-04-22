@@ -6,6 +6,7 @@ use rand::{Rng};
 pub mod configuration;
 pub mod candles;
 pub mod drivers;
+pub mod storage;
 //pub mod brokers;
 //pub mod csv_file;
 //pub mod market;
@@ -13,7 +14,6 @@ pub mod drivers;
 //pub mod replayer;
 //pub mod strategies;
 //pub mod strategy;
-//pub mod storage;
 
 //pub use strategy::Strategy;
 //pub use replayer::Replayer;

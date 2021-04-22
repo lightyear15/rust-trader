@@ -1,4 +1,3 @@
-
 #[derive(Debug, serde::Deserialize)]
 pub struct ExchangeSettings {
     pub api_key: String,
@@ -8,6 +7,7 @@ pub struct ExchangeSettings {
 #[derive(Debug, serde::Deserialize)]
 pub struct Settings {
     pub binance: ExchangeSettings,
+    pub candle_storage: String,
 }
 
 impl Settings {
