@@ -79,8 +79,8 @@ pub mod binance {
                     ("symbol", sym),
                     ("interval", "1m"),
                     ("startTime", &format!("{}000", start.timestamp())),
-                    ("limit", "1000"),
-                    //("limit", "10"),
+                    //("limit", "1000"),
+                    ("limit", "10"),
                 ]);
             request
                 .send()

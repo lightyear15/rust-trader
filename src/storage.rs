@@ -18,7 +18,7 @@ impl Candles {
         Candles { client }
     }
 
-    async fn store(&self, exchange: &str, symbol: &str, candles: &[candles::Candle]) -> Result<u64, Error> {
+    pub async fn store(&self, exchange: &str, symbol: &str, candles: &[candles::Candle]) -> Result<u64, Error> {
         let insert_statement = format!(
             "INSERT INTO {} (symbol, tstamp, open, low, high, close, volume) VALUES",
             exchange
@@ -31,6 +31,7 @@ impl Candles {
         });
         value_statements.remove(0);
         let statement = format!("{} {}", insert_statement, &value_statements);
+        println!("{}", &statement);
         self.client.execute(statement.as_str(), &[]).await
     }
 }
