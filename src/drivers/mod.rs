@@ -69,6 +69,7 @@ pub mod binance {
     #[async_trait]
     impl super::Importer for Driver {
         async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle> {
+            let start_str = format!("{}000", start.timestamp());
             let url = self.url.clone() + "/api/v3/klines";
             let request = self
                 .client
@@ -78,9 +79,9 @@ pub mod binance {
                 .query(&[
                     ("symbol", sym),
                     ("interval", "1m"),
-                    ("startTime", &format!("{}000", start.timestamp())),
-                    //("limit", "1000"),
-                    ("limit", "10"),
+                    ("startTime", &start_str),
+                    ("limit", "1000"),
+                    //("limit", "10"),
                 ]);
             request
                 .send()
@@ -96,7 +97,8 @@ pub mod binance {
                     high: cnd.high.parse::<f64>().expect("in cnd.high"),
                     close: cnd.close.parse::<f64>().expect("in cnd.close"),
                     volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
-                    tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
+                    //tstamp: NaiveDateTime::from_timestamp(((cnd.close_time + 1) / 1000) as i64, 0),
+                    tstamp: NaiveDateTime::from_timestamp((cnd.open_time  / 1000) as i64, 0),
                 })
                 .collect()
         }

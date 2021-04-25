@@ -15,5 +15,10 @@ chrono = {version = "0.4.19", features = ["serde"]}
 structopt = { version = "0.3", default-features = false }
 tokio-postgres = {version = "0.7.1"}
 tokio = {version = "1.5.0", features = ["rt-multi-thread", "macros"]}
-reqwest = {version = "0.11.3", features = ["multipart", "json"]}
+reqwest = {version = "0.11.3", features = ["json"]}
 async-trait = {version = "0.1.5"}
+
+[features]
+static_ssl = ["openssl/vendored"]
+[dependencies.openssl]
+optional = true

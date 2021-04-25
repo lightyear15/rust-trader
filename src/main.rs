@@ -1,5 +1,4 @@
-use chrono::prelude::*;
-use std::path::PathBuf;
+use chrono::{NaiveDate, NaiveDateTime};
 use structopt::StructOpt;
 use trader::*;
 
@@ -9,16 +8,16 @@ enum Trade {
     Import {
         exchange: String,
         symbol: String,
-        start: chrono::NaiveDate,
-        end: chrono::NaiveDate,
+        start: NaiveDate,
+        end: NaiveDate,
     },
     #[structopt(about = "backtest specific strategy")]
     Backtest {
         strategy: String,
         exchange: String,
         symbol: String,
-        start: chrono::NaiveDate,
-        end: chrono::NaiveDate,
+        start: NaiveDate,
+        end: NaiveDate,
     },
 }
 
@@ -26,7 +25,6 @@ enum Trade {
 async fn main() {
     let settings = configuration::Settings::get_configuration("trader.toml").expect("Failed at reading configuration");
     let opt = Trade::from_args();
-    println!("{:?}", opt);
     match opt {
         Trade::Import {
             exchange,
@@ -34,11 +32,9 @@ async fn main() {
             start,
             end,
         } => {
-            println!("Import");
             let driver = drivers::create(&exchange, &settings).expect("exchange not found");
             let storage = storage::Candles::new(&settings.candle_storage).await;
-            let candles = driver.get_candles(&symbol, &start.and_hms(0,0,0)).await;
-            storage.store(&exchange, &symbol, &candles).await;
+            let res = import(driver.as_ref(), &storage, &exchange, &symbol, &start, &end).await;
         }
         Trade::Backtest {
             strategy,
@@ -50,4 +46,28 @@ async fn main() {
             println!("Backtest");
         }
     };
+}
+
+async fn import(
+    driver: &dyn drivers::Importer,
+    storage: &storage::Candles,
+    exchange: &str,
+    sym: &str,
+    start: &NaiveDate,
+    end: &NaiveDate,
+) -> u64 {
+    println!("importing candles for {} days", end.signed_duration_since(*start).num_days());
+    let mut total: u64 = 0;
+    let mut tstamp = start.and_hms(0, 0, 0);
+    let end_t = end.and_hms(0, 0, 0);
+    while tstamp < end_t {
+        let candles = driver.get_candles(sym, &tstamp).await;
+        if candles.is_empty() {
+            panic!("not getting any candles");
+        }
+        total += storage.store(exchange, sym, &candles).await.expect("in storing data to DB");
+        tstamp = candles.last().expect("last not present").tstamp;
+        println!("{}",tstamp);
+    }
+    total
 }
