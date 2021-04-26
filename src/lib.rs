@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
 use chrono::{Duration, NaiveDateTime};
-use rand::{Rng};
+use rand::Rng;
 
-pub mod configuration;
 pub mod candles;
+pub mod configuration;
 pub mod drivers;
 pub mod storage;
+pub mod binance;
 //pub mod brokers;
 //pub mod csv_file;
 //pub mod market;
@@ -37,27 +38,6 @@ pub struct Symbol {
     base_decimals: usize,
     quote: String,
     quote_decimals: usize,
-}
-impl Symbol {
-    pub fn new(symbol: String, pretty: String, quote: String, quote_decimals: usize, base: String, base_decimals: usize) -> Self {
-        Symbol {
-            symbol,
-            pretty,
-            base,
-            base_decimals,
-            quote,
-            quote_decimals,
-        }
-    }
-    pub fn get_quote(&self) -> &str {
-        &self.quote
-    }
-    pub fn get_base(&self) -> &str {
-        &self.base
-    }
-    pub fn get_exchange_symbol(&self) -> &str {
-        &self.symbol
-    }
 }
 
 impl std::string::ToString for Symbol {

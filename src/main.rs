@@ -32,9 +32,10 @@ async fn main() {
             start,
             end,
         } => {
-            let driver = drivers::create(&exchange, &settings).expect("exchange not found");
+            let driver = drivers::create_importer(&exchange, &settings).expect("exchange not found");
             let storage = storage::Candles::new(&settings.candle_storage).await;
             let res = import(driver.as_ref(), &storage, &exchange, &symbol, &start, &end).await;
+            println!("downloaded {} candles", res);
         }
         Trade::Backtest {
             strategy,
@@ -43,6 +44,7 @@ async fn main() {
             start,
             end,
         } => {
+
             println!("Backtest");
         }
     };
@@ -67,7 +69,7 @@ async fn import(
         }
         total += storage.store(exchange, sym, &candles).await.expect("in storing data to DB");
         tstamp = candles.last().expect("last not present").tstamp;
-        println!("{}",tstamp);
+        println!("{}", tstamp);
     }
     total
 }

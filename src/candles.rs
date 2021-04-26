@@ -5,7 +5,7 @@ use std::fmt;
 #[derive(Debug, Deserialize, Clone)]
 pub struct Candle {
     #[serde(deserialize_with="deserialize_from_str", alias = "date")]
-    pub tstamp: chrono::NaiveDateTime,
+    pub tstamp: chrono::NaiveDateTime, // refers to start timestamp
 
     pub open: f64,
     pub close: f64,
