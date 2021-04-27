@@ -118,9 +118,9 @@ impl drivers::SymbolParser for Rest {
             .json::<Vec<SymbolInfo>>()
             .await
             .expect("in json::<Vec<SymbolInfo>>")
-            .iter()
-            .find(|&sym_info| sym_info.symbol == sym)
-            .map(|sym_info| sym_info.clone().into())
+            .drain(0..)
+            .find(|sym_info| sym_info.symbol == sym)
+            .map(|sym_info| sym_info.into())
             .ok_or(Error::ErrNotFound)
     }
 }
