@@ -39,6 +39,36 @@ impl Candles {
     }
 
     pub async fn get(&self, exc: &str, sym: &str, start: &NaiveDateTime, num: u32, interval: Duration) -> Vec<Candle> {
+        /*
+         * 1 layer  -- enough is interval < 1 hour
+         * SELECT tstamp, open, low, high, close, volume 
+         * FROM <exchange>
+         * WHERE symbol = <sym> AND tstamp >= <start>
+         * ORDER BY 1
+         * LIMIT <num>
+         */
+
+        /* 2 layer -- if interval > 1 hour  -- if interval is > 1 day s/'hour'/'day'/
+         * SELECT tstamp_trunc AS tstamp, open, close,
+         *      MIN(low) AS low, MAX(high) AS high, SUM(volume) AS volume
+         * FROM (
+         *      SELECT tstamp, tstamp_trunc, low, high, volume
+         *      FIRST_VALUE(open) OVER(PARTITION BY tstamp_trunc ORDER BY tstamp) AS open ,
+         *      LAST_VALUE(close) OVER(PARTITION BY tstamp_trunc ORDER BY tstamp) AS close,
+         *      FROM (
+         *          SELECT tstamp, DATE_TRUNC('hour', tstamp) AS tstamp_trunc,
+         *                  open, low, high, close, volume
+         *          FROM <exchange>
+         *          WHERE symbol = <sym> AND tstamp >= <start>
+         *      )
+         * )
+         * GROUP BY 1, 2, 3
+         * ORDER BY 1
+         * LIMIT <num> * <chunk_size>
+         */
+        let select_st = "SELECT tstamp, open, low, high, close, volume";
+        let from_st = format!("FROM {}", exc);
+        let where_st = format!("symbol = '{}' AND tstamp > '{}'", sym, start);
         Vec::new()
     }
 }
