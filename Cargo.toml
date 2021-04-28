@@ -8,15 +8,16 @@ edition = "2018"
 
 [dependencies]
 config = {version = "0.11.0"}
-serde = {version = "1.0.120", features = ["derive"]}
+serde = {version = "1.0", features = ["derive", "std"]}
 #scan_fmt = "0.2.6"
 rand = {version = "0.8.3"}
-chrono = {version = "0.4.19", features = ["serde"]}
+chrono = {version = "0.4", features = ["serde"]}
 structopt = { version = "0.3", default-features = false }
 tokio-postgres = {version = "0.7.1", features = ["with-chrono-0_4"]}
-tokio = {version = "1.5.0", features = ["rt-multi-thread", "macros"]}
+tokio = {version = "1.5", features = ["rt-multi-thread", "macros"]}
 reqwest = {version = "0.11.3", features = ["json"]}
 async-trait = {version = "0.1.5"}
+humantime-serde = {version = "1.0"}
 
 [features]
 static_ssl = ["openssl/vendored"]

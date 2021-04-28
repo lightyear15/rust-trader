@@ -1,3 +1,4 @@
+
 #[derive(Debug, serde::Deserialize)]
 pub struct ExchangeSettings {
     pub api_key: String,
@@ -5,9 +6,19 @@ pub struct ExchangeSettings {
 }
 
 #[derive(Debug, serde::Deserialize)]
+pub struct StrategySettings {
+    pub name: String,
+    pub exchange: String,
+    pub symbol: String,
+    #[serde(deserialize_with = "chrono_duration_de")]
+    pub time_frame: chrono::Duration,
+}
+
+#[derive(Debug, serde::Deserialize)]
 pub struct Settings {
     pub binance: ExchangeSettings,
     pub candle_storage: String,
+    pub strategies: Vec<StrategySettings>,
 }
 
 impl Settings {
@@ -18,4 +29,12 @@ impl Settings {
         let settings = config_reader.try_into()?;
         Ok(settings)
     }
+}
+
+fn chrono_duration_de<'de, D>(des: D) -> Result<chrono::Duration, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Deserialize, Error};
+    chrono::Duration::from_std(humantime_serde::deserialize(des)?).map_err(|_| D::Error::custom("out of range"))
 }

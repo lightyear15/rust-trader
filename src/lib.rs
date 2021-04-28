@@ -3,18 +3,17 @@
 use chrono::{Duration, NaiveDateTime};
 use rand::Rng;
 
+pub mod binance;
 pub mod candles;
 pub mod configuration;
 pub mod drivers;
+pub mod orders;
 pub mod storage;
-pub mod binance;
+pub mod strategies;
 //pub mod brokers;
 //pub mod csv_file;
 //pub mod market;
-//pub mod order;
 //pub mod replayer;
-//pub mod strategies;
-//pub mod strategy;
 
 //pub use strategy::Strategy;
 //pub use replayer::Replayer;

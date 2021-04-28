@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::{Duration, NaiveDate};
 use structopt::StructOpt;
 use trader::*;
 
@@ -45,8 +45,13 @@ async fn main() {
             end,
         } => {
             let storage = storage::Candles::new(&settings.candle_storage).await;
-            let res = backtest(&storage, &exchange, &symbol, &start).await.expect("in backtesting");
 
+            let cfg = settings
+                .strategies.iter()
+                .find(|settings| settings.name == strategy && settings.exchange == exchange && settings.symbol == symbol)
+                .expect("no such strategy configuration");
+
+            let res = backtest(&storage, &strategy, &exchange, &symbol, &cfg.time_frame, &start, &end).await.expect("backtest epic fail");
             println!("Backtest {}", res);
         }
     };
@@ -76,11 +81,24 @@ async fn import(
     total
 }
 
-async fn backtest(storage: &storage::Candles, exchange: &str, sym: &str, start: &NaiveDate) -> Result<f64, Error> {
+async fn backtest(
+    storage: &storage::Candles,
+    strat: &str,
+    exchange: &str,
+    sym: &str,
+    time_frame: &chrono::Duration,
+    start: &NaiveDate,
+    end: &NaiveDate,
+) -> Result<f64, Error> {
     let start_t = start.and_hms(0, 0, 0);
-    let cnds = storage.get(&exchange, &sym, &start_t, 3, Duration::hours(6)).await;
+    let end_t = end.and_hms(0, 0, 0);
+
+    let mut strategy = strategies::create(strat).expect("strategy does not exist");
+
+    let cnds = storage.get(&exchange, &sym, &start_t, &end_t, time_frame, 3).await;
     for c in cnds {
-        println!("{:?}", c);
+        let action = strategy.on_new_candle();
+        println!("{:?} -> {:?}", c, action);
     }
     Ok(0.0)
 }

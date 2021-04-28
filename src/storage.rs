@@ -39,7 +39,15 @@ impl Candles {
     }
 
     //TODO: add a filter on end time
-    pub async fn get(&self, exc: &str, sym: &str, start: &NaiveDateTime, num: usize, interval: Duration) -> Vec<candles::Candle> {
+    pub async fn get(
+        &self,
+        exc: &str,
+        sym: &str,
+        start: &NaiveDateTime,
+        end: &NaiveDateTime,
+        interval: &Duration,
+        num: usize,
+    ) -> Vec<candles::Candle> {
         let statement: String;
         let mut chunk_size: usize;
         if interval.num_hours() == 0 {
@@ -47,12 +55,13 @@ impl Candles {
             statement = format!(
                 "SELECT tstamp, open, low, high, close, volume
 FROM {exchange}
-WHERE symbol = '{symbol}' AND tstamp >= '{start_time}'
+WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
 ORDER BY 1
 LIMIT {num}",
                 exchange = exc,
                 symbol = sym,
                 start_time = start.format("%Y-%m-%d %H:%M:%S"),
+                end_time = end.format("%Y-%m-%d %H:%M:%S"),
                 num = num * chunk_size
             );
         } else {
@@ -71,7 +80,7 @@ FROM (
      FROM (
          SELECT tstamp, DATE_TRUNC('{date_part}', tstamp) AS tstamp_trunc, open, low, high, close, volume
          FROM {exchange}
-         WHERE symbol = '{symbol}' AND tstamp >= '{start_time}'
+         WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
      ) AS t1
 ) AS t2
 GROUP BY 1, 2, 3
@@ -80,6 +89,7 @@ LIMIT {num}",
                 exchange = exc,
                 symbol = sym,
                 start_time = start.format("%Y-%m-%d %H:%M:%S"),
+                end_time = end.format("%Y-%m-%d %H:%M:%S"),
                 num = num * chunk_size,
                 date_part = date_part,
             );
