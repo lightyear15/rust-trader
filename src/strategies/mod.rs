@@ -1,4 +1,4 @@
-use super::{ orders, Error};
+use super::{ orders, Error, candles};
 
 pub mod sample;
 pub use sample::Sample;
@@ -11,7 +11,8 @@ pub enum Action {
 
 // a 1-symbol strategy
 pub trait Strategy {
-    fn on_new_candle(&mut self) -> Action;
+    fn on_new_candle(&mut self, history : &[candles::Candle]) -> Action;
+    fn get_candles_history_size(&self) -> usize;
 }
 
 pub fn create(strategy: &str ) -> Result<Box<dyn Strategy>, Error> {
