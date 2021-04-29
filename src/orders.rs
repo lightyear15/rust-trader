@@ -35,16 +35,16 @@ pub struct Transaction {
     pub tstamp: NaiveDateTime,
 }
 
-#[derive(PartialEq, Clone, Debug)]
-pub enum Status {
-    Open(Info),
-    Filled(Transaction),
-    Partial(Transaction),
-    Canceled,
-}
+//#[derive(PartialEq, Clone, Debug)]
+//pub enum Status {
+    //Open(Info),
+    //Filled(Transaction),
+    //Partial(Transaction),
+    //Canceled,
+//}
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Info {
+pub struct Order {
     pub symbol: String,
     pub side: Side,
     pub o_type: Type,

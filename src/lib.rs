@@ -10,12 +10,15 @@ pub mod drivers;
 pub mod orders;
 pub mod storage;
 pub mod strategies;
+pub mod wallets;
+pub mod backtest;
 //pub mod brokers;
 //pub mod csv_file;
 //pub mod market;
 //pub mod replayer;
 
-//pub use strategy::Strategy;
+pub use strategies::Strategy;
+pub use backtest::backtest;
 //pub use replayer::Replayer;
 //pub use csv_file::CSVFile;
 

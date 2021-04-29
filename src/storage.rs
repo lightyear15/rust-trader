@@ -38,7 +38,6 @@ impl Candles {
         self.client.execute(statement.as_str(), &[]).await
     }
 
-    //TODO: add a filter on end time
     pub async fn get(
         &self,
         exc: &str,
@@ -94,13 +93,69 @@ LIMIT {num}",
                 date_part = date_part,
             );
         }
-        let mut rows = self
-            .client
+        self.client
             .query(statement.as_str(), &[])
             .await
-            .expect("in querying for candles");
-        let candles: Vec<candles::Candle> = rows.drain(0..).map(|row| row.into()).collect();
-        candles.chunks(chunk_size).map(group_candles).collect()
+            .expect("in querying for candles")
+            .drain(0..)
+            .map(|row| row.into())
+            .collect::<Vec<candles::Candle>>()
+            .chunks(chunk_size)
+            .map(group_candles)
+            .collect()
+    }
+    async fn find_lower(
+        &self,
+        exc: &str,
+        sym: &str,
+        start: &NaiveDateTime,
+        end: &NaiveDateTime,
+        price: f64,
+    ) -> Option<chrono::NaiveDateTime> {
+        let statement = format!(
+            "SELECT tstamp
+FROM {exchange}
+WHERE symbol = '{symbol}' AND low <= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}'
+ORDER BY tstamp
+LIMIT 1",
+            exchange = exc,
+            symbol = sym,
+            start_time = start.format("%Y-%m-%d %H:%M:%S"),
+            end_time = end.format("%Y-%m-%d %H:%M:%S"),
+            price = price
+        );
+        self.client
+            .query(statement.as_str(), &[])
+            .await
+            .expect("in querying for lower")
+            .first().map(|row| {row.get(0)})
+    }
+
+    async fn find_higher(
+        &self,
+        exc: &str,
+        sym: &str,
+        start: &NaiveDateTime,
+        end: &NaiveDateTime,
+        price: f64,
+    ) -> Option<chrono::NaiveDateTime> {
+        let statement = format!(
+            "SELECT tstamp
+FROM {exchange}
+WHERE symbol = '{symbol}' AND high >= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}'
+ORDER BY tstamp
+LIMIT 1",
+            exchange = exc,
+            symbol = sym,
+            start_time = start.format("%Y-%m-%d %H:%M:%S"),
+            end_time = end.format("%Y-%m-%d %H:%M:%S"),
+            price = price
+        );
+        self.client
+            .query(statement.as_str(), &[])
+            .await
+            .expect("in querying for lower")
+            .first().map(|row| {row.get(0)})
     }
 }
 

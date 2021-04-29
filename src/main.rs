@@ -1,6 +1,6 @@
-use chrono::{Duration, NaiveDate};
+use chrono::NaiveDate;
 use structopt::StructOpt;
-use trader::*;
+use trader::{backtest, configuration, drivers, orders, storage, strategies, wallets, Error};
 
 #[derive(Debug, StructOpt)]
 enum Trade {
@@ -52,7 +52,8 @@ async fn main() {
                 .find(|settings| settings.name == strategy && settings.exchange == exchange && settings.symbol == symbol)
                 .expect("no such strategy configuration");
 
-            let res = backtest(&storage, &strategy, &exchange, &symbol, &cfg.time_frame, &start, &end)
+            let mut strategy = strategies::create(&strategy, exchange, symbol, cfg.time_frame).expect("strategies::create");
+            let res = backtest(&storage, strategy.as_mut(), &start, &end)
                 .await
                 .expect("backtest epic fail");
             println!("Backtest {}", res);
@@ -82,30 +83,4 @@ async fn import(
         println!("{}", tstamp);
     }
     total
-}
-
-async fn backtest(
-    storage: &storage::Candles,
-    strat: &str,
-    exchange: &str,
-    sym: &str,
-    time_frame: &chrono::Duration,
-    start: &NaiveDate,
-    end: &NaiveDate,
-) -> Result<f64, Error> {
-    let mut strategy = strategies::create(strat).expect("strategy does not exist");
-    let depth = strategy.get_candles_history_size();
-    let mut start_time = start.and_hms(0, 0, 0);
-    let mut tstamp = start_time + (*time_frame * (depth as i32));
-    let end_t = end.and_hms(0, 0, 0);
-    while tstamp < end_t {
-        println! ("{} -- {}", start_time, tstamp);
-        let mut cnds = storage.get(&exchange, &sym, &start_time, &end_t, time_frame, depth).await;
-        cnds.reverse();
-        let action = strategy.on_new_candle(cnds.as_slice());
-        tstamp += *time_frame;
-        start_time = tstamp - (*time_frame * depth as i32);
-        println!("action: {:?}", action)
-    }
-    Ok(0.0)
 }
