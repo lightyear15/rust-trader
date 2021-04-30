@@ -104,7 +104,7 @@ LIMIT {num}",
             .map(group_candles)
             .collect()
     }
-    async fn find_lower(
+  pub  async fn find_lower(
         &self,
         exc: &str,
         sym: &str,
@@ -131,7 +131,7 @@ LIMIT 1",
             .first().map(|row| {row.get(0)})
     }
 
-    async fn find_higher(
+pub    async fn find_higher(
         &self,
         exc: &str,
         sym: &str,

@@ -11,10 +11,10 @@ pub enum TimeInForce {
 pub enum Type {
     Market,
     Limit(f64),
-    TakeProfit(f64),
-    StopLoss(f64),
-    StopLossLimit(f64, f64, TimeInForce),
-    TakeProfitLimit(f64, f64, TimeInForce),
+    //TakeProfit(f64),
+    //StopLoss(f64),
+    //StopLossLimit(f64, f64, TimeInForce),
+    //TakeProfitLimit(f64, f64, TimeInForce),
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -45,6 +45,7 @@ pub struct Transaction {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Order {
+    pub exchange: String,
     pub symbol: String,
     pub side: Side,
     pub o_type: Type,

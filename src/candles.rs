@@ -2,10 +2,10 @@ use serde::Deserialize;
 //use std::error::Error;
 use std::fmt;
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Candle {
-    #[serde(deserialize_with="deserialize_from_str", alias = "date")]
     pub tstamp: chrono::NaiveDateTime, // refers to start timestamp
+    pub tframe: chrono::Duration,
 
     pub open: f64,
     pub close: f64,
