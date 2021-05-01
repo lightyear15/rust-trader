@@ -23,18 +23,18 @@ impl Candles {
         let insert_statement = format!(
             "INSERT INTO {} (symbol, tstamp, open, low, high, close, volume) VALUES",
             exchange
-        );
+            );
         let mut value_statements: String = candles.iter().fold(String::new(), |statement, cnd| {
             format!(
                 "{},('{}','{}',{},{},{},{},{})",
                 statement, symbol, cnd.tstamp, cnd.open, cnd.low, cnd.high, cnd.close, cnd.volume
-            )
+                )
         });
         value_statements.remove(0);
         let statement = format!(
             "{} {} ON CONFLICT(symbol, tstamp) DO NOTHING;",
             insert_statement, &value_statements
-        );
+            );
         self.client.execute(statement.as_str(), &[]).await
     }
 
@@ -46,7 +46,7 @@ impl Candles {
         end: &NaiveDateTime,
         interval: &Duration,
         num: usize,
-    ) -> Vec<candles::Candle> {
+        ) -> Vec<candles::Candle> {
         let statement: String;
         let mut chunk_size: usize;
         if interval.num_hours() == 0 {
@@ -57,12 +57,12 @@ FROM {exchange}
 WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
 ORDER BY 1
 LIMIT {num}",
-                exchange = exc,
-                symbol = sym,
-                start_time = start.format("%Y-%m-%d %H:%M:%S"),
-                end_time = end.format("%Y-%m-%d %H:%M:%S"),
-                num = num * chunk_size
-            );
+exchange = exc,
+symbol = sym,
+start_time = start.format("%Y-%m-%d %H:%M:%S"),
+end_time = end.format("%Y-%m-%d %H:%M:%S"),
+num = num * chunk_size
+);
         } else {
             chunk_size = interval.num_hours() as usize;
             let mut date_part = "hour";
@@ -85,13 +85,13 @@ FROM (
 GROUP BY 1, 2, 3
 ORDER BY 1
 LIMIT {num}",
-                exchange = exc,
-                symbol = sym,
-                start_time = start.format("%Y-%m-%d %H:%M:%S"),
-                end_time = end.format("%Y-%m-%d %H:%M:%S"),
-                num = num * chunk_size,
-                date_part = date_part,
-            );
+exchange = exc,
+symbol = sym,
+start_time = start.format("%Y-%m-%d %H:%M:%S"),
+end_time = end.format("%Y-%m-%d %H:%M:%S"),
+num = num * chunk_size,
+date_part = date_part,
+);
         }
         self.client
             .query(statement.as_str(), &[])
@@ -104,26 +104,26 @@ LIMIT {num}",
             .map(group_candles)
             .collect()
     }
-  pub  async fn find_lower(
+    pub  async fn find_lower(
         &self,
         exc: &str,
         sym: &str,
         start: &NaiveDateTime,
         end: &NaiveDateTime,
         price: f64,
-    ) -> Option<chrono::NaiveDateTime> {
+        ) -> Option<chrono::NaiveDateTime> {
         let statement = format!(
             "SELECT tstamp
 FROM {exchange}
 WHERE symbol = '{symbol}' AND low <= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}'
 ORDER BY tstamp
 LIMIT 1",
-            exchange = exc,
-            symbol = sym,
-            start_time = start.format("%Y-%m-%d %H:%M:%S"),
-            end_time = end.format("%Y-%m-%d %H:%M:%S"),
-            price = price
-        );
+exchange = exc,
+symbol = sym,
+start_time = start.format("%Y-%m-%d %H:%M:%S"),
+end_time = end.format("%Y-%m-%d %H:%M:%S"),
+price = price
+);
         self.client
             .query(statement.as_str(), &[])
             .await
@@ -131,26 +131,26 @@ LIMIT 1",
             .first().map(|row| {row.get(0)})
     }
 
-pub    async fn find_higher(
+    pub    async fn find_higher(
         &self,
         exc: &str,
         sym: &str,
         start: &NaiveDateTime,
         end: &NaiveDateTime,
         price: f64,
-    ) -> Option<chrono::NaiveDateTime> {
+        ) -> Option<chrono::NaiveDateTime> {
         let statement = format!(
             "SELECT tstamp
 FROM {exchange}
 WHERE symbol = '{symbol}' AND high >= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}'
 ORDER BY tstamp
 LIMIT 1",
-            exchange = exc,
-            symbol = sym,
-            start_time = start.format("%Y-%m-%d %H:%M:%S"),
-            end_time = end.format("%Y-%m-%d %H:%M:%S"),
-            price = price
-        );
+exchange = exc,
+symbol = sym,
+start_time = start.format("%Y-%m-%d %H:%M:%S"),
+end_time = end.format("%Y-%m-%d %H:%M:%S"),
+price = price
+);
         self.client
             .query(statement.as_str(), &[])
             .await
@@ -163,6 +163,7 @@ impl std::convert::From<row::Row> for candles::Candle {
     fn from(row: row::Row) -> Self {
         let mut cnd = candles::Candle {
             tstamp: NaiveDateTime::from_timestamp(0, 0),
+            tframe: Duration::minutes(1),
             open: 0.0,
             low: 0.0,
             high: 0.0,
@@ -199,6 +200,7 @@ impl std::convert::From<row::Row> for candles::Candle {
 fn group_candles(cnds: &[candles::Candle]) -> candles::Candle {
     let cnd = candles::Candle {
         tstamp: cnds.first().expect("can't be size 0").tstamp,
+        tframe: Duration::minutes(1),
         low: std::f64::MAX,
         high: std::f64::MIN,
         open: cnds.first().expect("can't be size 0").open,

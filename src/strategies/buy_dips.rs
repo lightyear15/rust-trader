@@ -23,6 +23,7 @@ impl Strategy for BuyDips {
         let current_price = history.last().expect("last candle").close;
         if current_price < avg {
             let order = orders::Order {
+                exchange: self.exchange.clone(),
                 symbol: self.sym.clone(),
                 side: orders::Side::Buy,
                 o_type: orders::Type::Market,
@@ -42,6 +43,7 @@ impl Strategy for BuyDips {
         let price = tx.avg_price * 1.05;
         let volume = tx.volume / 1.05;
         Action::NewOrder(orders::Order {
+                exchange: self.exchange.clone(),
             symbol: self.sym.clone(),
             side: orders::Side::Sell,
             o_type: orders::Type::Limit(price),

@@ -53,7 +53,7 @@ async fn main() {
                 .expect("no such strategy configuration");
 
             let mut strategy = strategies::create(&strategy, exchange, symbol, cfg.time_frame).expect("strategies::create");
-            let res = backtest(&storage, strategy.as_mut(), &start, &end)
+            let res = backtest(storage, strategy, start, end)
                 .await
                 .expect("backtest epic fail");
             println!("Backtest {}", res);

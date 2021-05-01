@@ -29,10 +29,10 @@ pub type Id = i64;
 pub struct Transaction {
     pub symbol: String,
     pub side: Side,
-    pub order_id: Id,
     pub avg_price: f64,
     pub volume: f64,
     pub tstamp: NaiveDateTime,
+    pub order: Order,
 }
 
 //#[derive(PartialEq, Clone, Debug)]
@@ -50,6 +50,6 @@ pub struct Order {
     pub side: Side,
     pub o_type: Type,
     pub volume: f64,
-    pub expire: Option<Duration>,
+    pub expire: Option<chrono::NaiveDateTime>,
     pub reference: i32,
 }

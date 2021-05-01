@@ -1,6 +1,6 @@
 use super::{candles, drivers, Error, Symbol};
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime,Duration};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, HOST, USER_AGENT};
 use reqwest::Client;
 
@@ -80,11 +80,11 @@ impl drivers::Importer for Rest {
             .headers(self.default_headers.clone())
             //.header("X-MBX-APIKEY", &self.api_key)
             .query(&[
-                ("symbol", sym),
-                ("interval", "1m"),
-                ("startTime", &start_str),
-                ("limit", "1000"),
-                //("limit", "10"),
+                   ("symbol", sym),
+                   ("interval", "1m"),
+                   ("startTime", &start_str),
+                   ("limit", "1000"),
+                   //("limit", "10"),
             ]);
         request
             .send()
@@ -101,8 +101,9 @@ impl drivers::Importer for Rest {
                 close: cnd.close.parse::<f64>().expect("in cnd.close"),
                 volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
                 tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
+                tframe: Duration::minutes(1),
             })
-            .collect()
+        .collect()
     }
 }
 
