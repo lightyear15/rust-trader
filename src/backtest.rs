@@ -1,7 +1,7 @@
 use super::orders::{Order, Side, Transaction, Type};
-use super::strategies::Action;
+use super::strategies::{Action, Statistics};
 use super::{candles::Candle, storage, wallets, Error, Strategy};
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
 use tokio::runtime::Runtime;
 
 pub async fn backtest(
@@ -9,7 +9,7 @@ pub async fn backtest(
     mut strategy: Box<dyn Strategy>,
     start: NaiveDate,
     end: NaiveDate,
-    ) -> Result<f64, Error> {
+    ) -> Result<Statistics, Error> {
     // set up
     let rt = Runtime::new().unwrap();
     let end_t = end.and_hms(0, 0, 0);
@@ -18,7 +18,7 @@ pub async fn backtest(
     let mut tstamp = start_time + (*(strategy.time_frame()) * (depth as i32));
 
     // preparing the environment
-    let mut wallet = wallets::SimplePairWallet {
+    let mut wallet = wallets::SpotPairWallet {
         base: 0.0,
         quote: 10000.0,
     };
@@ -26,7 +26,7 @@ pub async fn backtest(
     let mut transactions: Vec<Transaction> = Vec::new();
 
     // performance tracking
-    let mut last_price: f64 = 0.0;
+    let stats = Statistics::new(wallet.quote);
 
     while tstamp < end_t {
         let mut cnds = storage.get(strategy.exchange(), strategy.symbol(), &start_time, &end_t, strategy.time_frame(), depth).await;
@@ -36,18 +36,14 @@ pub async fn backtest(
         cnds.reverse();
 
         let last = cnds.last().expect("len == 0 ??, impossible!!");
-        last_price = last.close;
 
         // processing outstanding orders
-        outstanding_orders = outstanding_orders
-            .into_iter()
-            .filter(|order| is_not_expired(order, last))
-            .collect();
+        outstanding_orders.retain(|ord| is_not_expired(ord, last));
         let mut new_tx: Vec<Transaction> = outstanding_orders
             .drain_filter(|order| order_in_candle(order, last))
             .map(|order| rt.block_on(process_order(&order, last, &storage)).expect("in process order")).collect();
         // check if transactions were from a TakeProfit or StopLoss
-        let mut tp_sl_orders :Vec<Order> = Vec::new();
+        let mut tp_sl_orders :Vec<Order> = Vec::new(); // TODO: add support for tp and sl orders
         let mut tp_sl_tx :Vec<Transaction> = tp_sl_orders
             .drain_filter(|order| order_in_candle(order, last))
             .map(|order| rt.block_on(process_order(&order, last, &storage)).expect("in process tp/sl orders")).collect();
@@ -120,13 +116,13 @@ async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> 
     }
 }
 
-fn update_wallet(tx: &Transaction, wallet: &wallets::SimplePairWallet) -> wallets::SimplePairWallet {
+fn update_wallet(tx: &Transaction, wallet: &wallets::SpotPairWallet) -> wallets::SpotPairWallet {
     match tx.side {
-        Side::Buy => wallets::SimplePairWallet {
+        Side::Buy => wallets::SpotPairWallet {
             base: wallet.base + tx.volume,
             quote: wallet.quote - (tx.avg_price * tx.volume),
         },
-        Side::Sell => wallets::SimplePairWallet {
+        Side::Sell => wallets::SpotPairWallet {
             base: wallet.base - tx.volume,
             quote: wallet.quote + (tx.avg_price * tx.volume),
         },

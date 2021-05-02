@@ -15,7 +15,7 @@ impl Sample {
 }
 
 impl Strategy for Sample {
-    fn on_new_candle(&mut self, wallet : &wallets::SimplePairWallet, history : &[candles::Candle]) -> Action {
+    fn on_new_candle(&mut self, wallet : &wallets::SpotPairWallet, history : &[candles::Candle]) -> Action {
         println!("at iteration {}", self.index);
         for c in history {
             println!("{:?}", c);
@@ -23,7 +23,7 @@ impl Strategy for Sample {
         self.index += 1;
         Action::None
     }
-    fn on_new_transaction(&mut self, wallet :&wallets::SimplePairWallet, tx: &orders::Transaction) -> Action {
+    fn on_new_transaction(&mut self, wallet :&wallets::SpotPairWallet, tx: &orders::Transaction) -> Action {
         Action::None
     }
 

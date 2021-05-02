@@ -18,7 +18,7 @@ impl BuyDips {
 }
 
 impl Strategy for BuyDips {
-    fn on_new_candle(&mut self, wallet: &wallets::SimplePairWallet, history: &[candles::Candle]) -> Action {
+    fn on_new_candle(&mut self, wallet: &wallets::SpotPairWallet, history: &[candles::Candle]) -> Action {
         let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
         let current_price = history.last().expect("last candle").close;
         if current_price < avg {
@@ -36,7 +36,7 @@ impl Strategy for BuyDips {
         }
         Action::None
     }
-    fn on_new_transaction(&mut self, wallet: &wallets::SimplePairWallet, tx: &orders::Transaction) -> Action {
+    fn on_new_transaction(&mut self, wallet: &wallets::SpotPairWallet, tx: &orders::Transaction) -> Action {
         if tx.side == orders::Side::Sell {
             return Action::None;
         }

@@ -56,7 +56,7 @@ async fn main() {
             let res = backtest(storage, strategy, start, end)
                 .await
                 .expect("backtest epic fail");
-            println!("Backtest {}", res);
+            println!("Backtest {:?}", res);
         }
     };
 }

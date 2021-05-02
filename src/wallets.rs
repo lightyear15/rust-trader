@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub struct SimplePairWallet {
+pub struct SpotPairWallet {
     pub base: f64,
     pub quote: f64,
 }
