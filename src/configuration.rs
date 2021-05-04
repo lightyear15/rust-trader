@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct ExchangeSettings {
@@ -16,7 +17,7 @@ pub struct StrategySettings {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Settings {
-    pub binance: ExchangeSettings,
+    pub exchanges : HashMap<String, ExchangeSettings>,
     pub candle_storage: String,
     pub strategies: Vec<StrategySettings>,
 }
@@ -33,8 +34,8 @@ impl Settings {
 
 fn chrono_duration_de<'de, D>(des: D) -> Result<chrono::Duration, D::Error>
 where
-    D: serde::Deserializer<'de>,
+D: serde::Deserializer<'de>,
 {
-    use serde::de::{Deserialize, Error};
+    use serde::de::Error;
     chrono::Duration::from_std(humantime_serde::deserialize(des)?).map_err(|_| D::Error::custom("out of range"))
 }

@@ -17,7 +17,7 @@ pub mod backtest;
 //pub mod market;
 //pub mod replayer;
 
-pub use strategies::Strategy;
+pub use strategies::SpotSinglePairStrategy;
 pub use backtest::backtest;
 //pub use replayer::Replayer;
 //pub use csv_file::CSVFile;
@@ -54,28 +54,3 @@ fn generate_random_tstamp(start: &NaiveDateTime, end: &NaiveDateTime) -> NaiveDa
     let rand_time = Duration::seconds(rng.gen_range(0..time_frame.num_seconds()));
     *start + rand_time
 }
-//#[allow(dead_code)]
-//pub struct Transaction {
-//symbol : String,
-//price : f64,
-//volume : f64,
-//reference: i32
-//}
-
-//#[allow(dead_code)]
-//pub struct Position {
-//average_entry_price: f64,
-//volume : f64,
-//}
-
-//#[allow(dead_code)]
-//impl Position {
-//fn new() -> Self {
-//Position{average_entry_price: 0.0, volume: 0.0}
-//}
-//fn collect(&self, tx: &Transaction) -> Self {
-//let tot_volume = self.volume + tx.volume;
-//let avg_price = (self.average_entry_price * self.volume + tx.price * tx.volume) / tot_volume;
-//Position{ average_entry_price : avg_price, volume: tot_volume}
-//}
-//}

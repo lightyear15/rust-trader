@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use structopt::StructOpt;
-use trader::{backtest, configuration, drivers, orders, storage, strategies, wallets, Error};
+use trader::{backtest, configuration, drivers, storage, strategies};
 
 #[derive(Debug, StructOpt)]
 enum Trade {
@@ -19,6 +19,8 @@ enum Trade {
         start: NaiveDate,
         end: NaiveDate,
     },
+    #[structopt(about = "live trading specific strategy")]
+    Live {},
 }
 
 #[tokio::main]
@@ -32,7 +34,8 @@ async fn main() {
             start,
             end,
         } => {
-            let driver = drivers::create_importer(&exchange, &settings).expect("exchange not found");
+            let exc_sett = settings.exchanges.get(&exchange).expect("can't find the exchange in config");
+            let driver = drivers::create_importer(&exchange, &exc_sett).expect("exchange not found");
             let storage = storage::Candles::new(&settings.candle_storage).await;
             let res = import(driver.as_ref(), &storage, &exchange, &symbol, &start, &end).await;
             println!("downloaded {} candles", res);
@@ -45,18 +48,27 @@ async fn main() {
             end,
         } => {
             let storage = storage::Candles::new(&settings.candle_storage).await;
-
             let cfg = settings
                 .strategies
                 .iter()
                 .find(|settings| settings.name == strategy && settings.exchange == exchange && settings.symbol == symbol)
                 .expect("no such strategy configuration");
 
-            let mut strategy = strategies::create(&strategy, exchange, symbol, cfg.time_frame).expect("strategies::create");
-            let res = backtest(storage, strategy, start, end)
-                .await
-                .expect("backtest epic fail");
+            let strategy = strategies::create(&strategy, exchange, symbol, cfg.time_frame).expect("strategies::create");
+            let res = backtest(storage, strategy, start, end).await.expect("backtest epic fail");
             println!("Backtest {:?}", res);
+        }
+        Trade::Live {} => {
+            for strat in settings.strategies {
+                let exc_sett = settings.exchanges.get(&strat.exchange).expect("can't find the exchange in config");
+                let symbol = drivers::create_symbol_parser(&strat.exchange, exc_sett)
+                    .expect("exchange not found")
+                    .get_symbol(&strat.symbol)
+                    .await
+                    .expect("symbol not found");
+
+                println!("starting strategy {} for {} on {}", strat.name, symbol.to_string(), strat.exchange);
+            }
         }
     };
 }

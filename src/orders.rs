@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDateTime};
+use chrono::{ NaiveDateTime};
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TimeInForce {

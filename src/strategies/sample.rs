@@ -1,4 +1,6 @@
-use super::{wallets, candles, Strategy, orders, Action};
+use super::{SpotSinglePairStrategy, Action};
+use super::{  Candle, SpotPairWallet};
+use super::orders::{Order, Transaction};
 
 #[derive(Clone)]
 pub struct Sample {
@@ -14,8 +16,8 @@ impl Sample {
     }
 }
 
-impl Strategy for Sample {
-    fn on_new_candle(&mut self, wallet : &wallets::SpotPairWallet, history : &[candles::Candle]) -> Action {
+impl SpotSinglePairStrategy for Sample {
+    fn on_new_candle(&mut self, _wallet :&SpotPairWallet, _outstanding_orders: &[Order], history : &[Candle]) -> Action{
         println!("at iteration {}", self.index);
         for c in history {
             println!("{:?}", c);
@@ -23,7 +25,7 @@ impl Strategy for Sample {
         self.index += 1;
         Action::None
     }
-    fn on_new_transaction(&mut self, wallet :&wallets::SpotPairWallet, tx: &orders::Transaction) -> Action {
+    fn on_new_transaction(&mut self, _wallet :&SpotPairWallet, _outstanding_orders: &[Order], _tx: &Transaction) -> Action{
         Action::None
     }
 

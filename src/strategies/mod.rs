@@ -1,4 +1,5 @@
-use super::{ orders, Error, candles, wallets};
+use super::{ orders, Error, candles::Candle, wallets::SpotPairWallet};
+use super::orders::{Order, Transaction};
 
 pub mod sample;
 pub mod buy_dips;
@@ -8,13 +9,14 @@ pub use buy_dips::BuyDips;
 #[derive(Debug)]
 pub enum Action {
     None,
-    NewOrder(orders::Order),
+    NewOrder(Order),
+    CancelOrder(i32),
 }
 
 // a 1-symbol strategy
-pub trait Strategy {
-    fn on_new_candle(&mut self, wallet :&wallets::SpotPairWallet, history : &[candles::Candle]) -> Action;
-    fn on_new_transaction(&mut self, wallet :&wallets::SpotPairWallet, tx: &orders::Transaction) -> Action;
+pub trait SpotSinglePairStrategy {
+    fn on_new_candle(&mut self, wallet :&SpotPairWallet, outstanding_orders: &[Order], history : &[Candle]) -> Action;
+    fn on_new_transaction(&mut self, wallet :&SpotPairWallet, outstanding_orders: &[Order], tx: &Transaction) -> Action;
 
     fn get_candles_history_size(&self) -> usize;
     fn exchange(&self) -> &str;
@@ -35,7 +37,7 @@ pub trait Strategy {
     }
 }
 
-pub fn create(strategy: &str, exch: String, sym :String, time_frame :chrono::Duration) -> Result<Box<dyn Strategy>, Error> {
+pub fn create(strategy: &str, exch: String, sym :String, time_frame :chrono::Duration) -> Result<Box<dyn SpotSinglePairStrategy>, Error> {
     match strategy {
         "sample" => Ok(Box::new(Sample::new(exch, sym, time_frame))),
         "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame))),
@@ -67,7 +69,7 @@ impl Statistics {
             highest_balance: balance_start
         }
     }
-    pub fn update_with_last_price(&mut self, wallet: &wallets::SpotPairWallet, pr: f64) {
+    pub fn update_with_last_price(&mut self, wallet: &SpotPairWallet, pr: f64) {
         let balance = wallet.quote + wallet.base * pr;
         self.balance = balance;
         if balance < self.lowest_balance {
@@ -77,13 +79,13 @@ impl Statistics {
             self.highest_balance = balance
         }
     }
-    pub fn update_with_transaction(&mut self, tx: &orders::Transaction) {
+    pub fn update_with_transaction(&mut self, _tx: &orders::Transaction) {
         self.transactions += 1;
     }
-    pub fn update_with_order(&mut self, tx: &orders::Order) {
+    pub fn update_with_order(&mut self, _ord: &orders::Order) {
         self.orders += 1;
     }
-    pub fn update_with_expired_order(&mut self, tx: &orders::Order) {
+    pub fn update_with_expired_order(&mut self, _ord: &orders::Order) {
         self.canceled_orders += 1;
     }
 }

@@ -1,8 +1,10 @@
 use super::{candles, drivers, Error, Symbol};
 use async_trait::async_trait;
-use chrono::{NaiveDateTime,Duration};
+use chrono::{Duration, NaiveDateTime};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, HOST, USER_AGENT};
 use reqwest::Client;
+use tokio_tungstenite::{WebSocketStream, MaybeTlsStream};
+use tokio::net::TcpStream;
 
 #[derive(Debug, serde::Deserialize)]
 struct Candle {
@@ -21,6 +23,11 @@ struct Candle {
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
+struct ExchangeInfo {
+    symbols: Vec<SymbolInfo>,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
 struct SymbolInfo {
     symbol: String,
     #[serde(alias = "baseAsset")]
@@ -31,18 +38,6 @@ struct SymbolInfo {
     quote: String,
     #[serde(alias = "quoteAssetPrecision")]
     quote_precision: usize,
-}
-impl std::convert::From<SymbolInfo> for Symbol {
-    fn from(sym : SymbolInfo) -> Self {
-        Symbol {
-            pretty : format!("{}-{}", &sym.base, &sym.quote),
-            symbol: sym.symbol,
-            base: sym.base,
-            base_decimals: sym.base_precision,
-            quote: sym.quote,
-            quote_decimals: sym.quote_precision,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,11 +75,11 @@ impl drivers::Importer for Rest {
             .headers(self.default_headers.clone())
             //.header("X-MBX-APIKEY", &self.api_key)
             .query(&[
-                   ("symbol", sym),
-                   ("interval", "1m"),
-                   ("startTime", &start_str),
-                   ("limit", "1000"),
-                   //("limit", "10"),
+                ("symbol", sym),
+                ("interval", "1m"),
+                ("startTime", &start_str),
+                ("limit", "1000"),
+                //("limit", "10"),
             ]);
         request
             .send()
@@ -103,25 +98,44 @@ impl drivers::Importer for Rest {
                 tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
                 tframe: Duration::minutes(1),
             })
-        .collect()
+            .collect()
     }
 }
 
 #[async_trait]
 impl drivers::SymbolParser for Rest {
     async fn get_symbol(&self, sym: &str) -> Result<Symbol, Error> {
-        let url = self.url.clone() + "api/v3/exchangeInfo";
+        let url = self.url.clone() + "/api/v3/exchangeInfo";
         let request = self.client.get(url).headers(self.default_headers.clone());
-        request
+        let mut info = request
             .send()
             .await
             .expect("in send binance exchange info request")
-            .json::<Vec<SymbolInfo>>()
+            .json::<ExchangeInfo>()
             .await
-            .expect("in json::<Vec<SymbolInfo>>")
-            .drain(0..)
+            .expect("in json::<ExchangeInfo>");
+
+        let x = info.symbols.drain(0..)
             .find(|sym_info| sym_info.symbol == sym)
-            .map(|sym_info| sym_info.into())
-            .ok_or(Error::ErrNotFound(format!("can't find symbol {}", sym)))
+            .map(to_symbol)
+            .ok_or_else(|| Error::ErrNotFound(format!("can't find symbol {}", sym)));
+        x
     }
+}
+
+fn to_symbol(sym : SymbolInfo) -> Symbol {
+        Symbol {
+            pretty: format!("{}-{}", &sym.base, &sym.quote),
+            symbol: sym.symbol,
+            base: sym.base,
+            base_decimals: sym.base_precision,
+            quote: sym.quote,
+            quote_decimals: sym.quote_precision,
+        }
+}
+
+
+pub struct Live {
+    rest : Rest,
+    ws :  WebSocketStream<MaybeTlsStream<TcpStream>>,
 }

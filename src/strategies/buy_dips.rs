@@ -1,4 +1,6 @@
-use super::{candles, orders, wallets, Action, Strategy};
+use super::{Action, SpotSinglePairStrategy};
+use super::{ orders, Candle, SpotPairWallet};
+use super::orders::{Order, Transaction};
 
 #[derive(Clone)]
 pub struct BuyDips {
@@ -17,8 +19,8 @@ impl BuyDips {
     }
 }
 
-impl Strategy for BuyDips {
-    fn on_new_candle(&mut self, wallet: &wallets::SpotPairWallet, history: &[candles::Candle]) -> Action {
+impl SpotSinglePairStrategy for BuyDips {
+    fn on_new_candle(&mut self, wallet :&SpotPairWallet, _outstanding_orders: &[Order], history : &[Candle]) -> Action{
         let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
         let current_price = history.last().expect("last candle").close;
         if current_price < avg {
@@ -35,14 +37,14 @@ impl Strategy for BuyDips {
         }
         Action::None
     }
-    fn on_new_transaction(&mut self, wallet: &wallets::SpotPairWallet, tx: &orders::Transaction) -> Action {
+    fn on_new_transaction(&mut self, _wallet :&SpotPairWallet, _outstanding_orders: &[Order], tx: &Transaction) -> Action{
         if tx.side == orders::Side::Sell {
             return Action::None;
         }
         let price = tx.avg_price * 1.05;
         let volume = tx.volume / 1.05;
         Action::NewOrder(orders::Order {
-                exchange: self.exchange.clone(),
+            exchange: self.exchange.clone(),
             symbol: self.sym.clone(),
             side: orders::Side::Sell,
             o_type: orders::Type::Limit(price),
