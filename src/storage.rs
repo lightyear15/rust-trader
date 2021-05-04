@@ -49,56 +49,57 @@ impl Candles {
         ) -> Vec<candles::Candle> {
         let statement: String;
         let mut chunk_size: usize;
+        let mut tframe :Duration;
         if interval.num_hours() == 0 {
+            tframe = Duration::minutes(1);
             chunk_size = interval.num_minutes() as usize;
             statement = format!(
                 "SELECT tstamp, open, low, high, close, volume
-FROM {exchange}
-WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
-ORDER BY 1
-LIMIT {num}",
-exchange = exc,
-symbol = sym,
-start_time = start.format("%Y-%m-%d %H:%M:%S"),
-end_time = end.format("%Y-%m-%d %H:%M:%S"),
-num = num * chunk_size
-);
+                FROM {exchange} WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
+                ORDER BY 1
+                LIMIT {num}",
+                exchange = exc,
+                symbol = sym,
+                start_time = start.format("%Y-%m-%d %H:%M:%S"),
+                end_time = end.format("%Y-%m-%d %H:%M:%S"),
+                num = num * chunk_size
+                );
         } else {
+            tframe = Duration::hours(1);
             chunk_size = interval.num_hours() as usize;
             let mut date_part = "hour";
             if interval.num_days() > 0 {
+                tframe = Duration::days(1);
                 chunk_size = interval.num_days() as usize;
                 date_part = "day";
             }
             statement = format!(
                 "SELECT tstamp_trunc AS tstamp, open, close, MIN(low) AS low, MAX(high) AS high, SUM(volume) AS volume
-FROM (
-     SELECT tstamp, tstamp_trunc, low, high, volume,
-     FIRST_VALUE(open) OVER(PARTITION BY tstamp_trunc ORDER BY tstamp) AS open,
-     FIRST_VALUE(close) OVER(PARTITION BY tstamp_trunc ORDER BY tstamp DESC) AS close
-     FROM (
-         SELECT tstamp, DATE_TRUNC('{date_part}', tstamp) AS tstamp_trunc, open, low, high, close, volume
-         FROM {exchange}
-         WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
-     ) AS t1
-) AS t2
-GROUP BY 1, 2, 3
-ORDER BY 1
-LIMIT {num}",
-exchange = exc,
-symbol = sym,
-start_time = start.format("%Y-%m-%d %H:%M:%S"),
-end_time = end.format("%Y-%m-%d %H:%M:%S"),
-num = num * chunk_size,
-date_part = date_part,
-);
+                FROM ( SELECT tstamp, tstamp_trunc, low, high, volume,
+                    FIRST_VALUE(open) OVER(PARTITION BY tstamp_trunc ORDER BY tstamp) AS open,
+                    FIRST_VALUE(close) OVER(PARTITION BY tstamp_trunc ORDER BY tstamp DESC) AS close
+                    FROM (SELECT tstamp, DATE_TRUNC('{date_part}', tstamp) AS tstamp_trunc, open, low, high, close, volume
+                        FROM {exchange}
+                        WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start_time}' AND '{end_time}'
+                    ) AS t1
+                ) AS t2
+                GROUP BY 1, 2, 3
+                ORDER BY 1
+                LIMIT {num}",
+                exchange = exc,
+                symbol = sym,
+                start_time = start.format("%Y-%m-%d %H:%M:%S"),
+                end_time = end.format("%Y-%m-%d %H:%M:%S"),
+                num = num * chunk_size,
+                date_part = date_part,
+                );
         }
         self.client
             .query(statement.as_str(), &[])
             .await
             .expect("in querying for candles")
             .drain(0..)
-            .map(|row| row.into())
+            .map(|row| row_to_candle(row, &tframe))
             .collect::<Vec<candles::Candle>>()
             .chunks(chunk_size)
             .map(group_candles)
@@ -112,18 +113,13 @@ date_part = date_part,
         end: &NaiveDateTime,
         price: f64,
         ) -> Option<chrono::NaiveDateTime> {
-        let statement = format!(
-            "SELECT tstamp
-FROM {exchange}
-WHERE symbol = '{symbol}' AND low <= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}'
-ORDER BY tstamp
-LIMIT 1",
-exchange = exc,
-symbol = sym,
-start_time = start.format("%Y-%m-%d %H:%M:%S"),
-end_time = end.format("%Y-%m-%d %H:%M:%S"),
-price = price
-);
+        let statement = format!("SELECT tstamp FROM {exchange} WHERE symbol = '{symbol}' AND low <= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}' ORDER BY tstamp LIMIT 1",
+                                exchange = exc,
+                                symbol = sym,
+                                start_time = start.format("%Y-%m-%d %H:%M:%S"),
+                                end_time = end.format("%Y-%m-%d %H:%M:%S"),
+                                price = price
+                               );
         self.client
             .query(statement.as_str(), &[])
             .await
@@ -139,18 +135,13 @@ price = price
         end: &NaiveDateTime,
         price: f64,
         ) -> Option<chrono::NaiveDateTime> {
-        let statement = format!(
-            "SELECT tstamp
-FROM {exchange}
-WHERE symbol = '{symbol}' AND high >= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}'
-ORDER BY tstamp
-LIMIT 1",
-exchange = exc,
-symbol = sym,
-start_time = start.format("%Y-%m-%d %H:%M:%S"),
-end_time = end.format("%Y-%m-%d %H:%M:%S"),
-price = price
-);
+        let statement = format!("SELECT tstamp FROM {exchange} WHERE symbol = '{symbol}' AND high >= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}' ORDER BY tstamp LIMIT 1",
+                                exchange = exc,
+                                symbol = sym,
+                                start_time = start.format("%Y-%m-%d %H:%M:%S"),
+                                end_time = end.format("%Y-%m-%d %H:%M:%S"),
+                                price = price
+                               );
         self.client
             .query(statement.as_str(), &[])
             .await
@@ -159,48 +150,46 @@ price = price
     }
 }
 
-impl std::convert::From<row::Row> for candles::Candle {
-    fn from(row: row::Row) -> Self {
-        let mut cnd = candles::Candle {
-            tstamp: NaiveDateTime::from_timestamp(0, 0),
-            tframe: Duration::minutes(1),
-            open: 0.0,
-            low: 0.0,
-            high: 0.0,
-            close: 0.0,
-            volume: 0.0,
+fn row_to_candle(row :row::Row, tframe :&chrono::Duration) -> candles::Candle {
+    let mut cnd = candles::Candle {
+        tstamp: NaiveDateTime::from_timestamp(0, 0),
+        tframe: *tframe,
+        open: 0.0,
+        low: 0.0,
+        high: 0.0,
+        close: 0.0,
+        volume: 0.0,
+    };
+    for (idx, col) in row.columns().iter().enumerate() {
+        match col.name() {
+            "tstamp" => {
+                cnd.tstamp = row.get(idx);
+            }
+            "open" => {
+                cnd.open = row.get::<usize, f32>(idx) as f64;
+            }
+            "low" => {
+                cnd.low = row.get::<usize, f32>(idx) as f64;
+            }
+            "high" => {
+                cnd.high = row.get::<usize, f32>(idx) as f64;
+            }
+            "close" => {
+                cnd.close = row.get::<usize, f32>(idx) as f64;
+            }
+            "volume" => {
+                cnd.volume = row.get::<usize, f32>(idx) as f64;
+            }
+            _ => {},
         };
-        for (idx, col) in row.columns().iter().enumerate() {
-            match col.name() {
-                "tstamp" => {
-                    cnd.tstamp = row.get(idx);
-                }
-                "open" => {
-                    cnd.open = row.get::<usize, f32>(idx) as f64;
-                }
-                "low" => {
-                    cnd.low = row.get::<usize, f32>(idx) as f64;
-                }
-                "high" => {
-                    cnd.high = row.get::<usize, f32>(idx) as f64;
-                }
-                "close" => {
-                    cnd.close = row.get::<usize, f32>(idx) as f64;
-                }
-                "volume" => {
-                    cnd.volume = row.get::<usize, f32>(idx) as f64;
-                }
-                _ => {}
-            };
-        }
-        cnd
     }
+    cnd
 }
 
 fn group_candles(cnds: &[candles::Candle]) -> candles::Candle {
     let cnd = candles::Candle {
         tstamp: cnds.first().expect("can't be size 0").tstamp,
-        tframe: Duration::minutes(1),
+        tframe: cnds.first().expect("can't be size 0").tframe * cnds.len() as i32,
         low: std::f64::MAX,
         high: std::f64::MIN,
         open: cnds.first().expect("can't be size 0").open,

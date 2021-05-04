@@ -12,8 +12,7 @@ pub fn create_importer(exchange: &str, config: &Settings) -> Result<Box<dyn Impo
     match exchange {
         "binance" => Ok(Box::new(binance::Rest::new(&config.binance.api_key))),
         _ => {
-            println!("i dont know");
-            Err(super::Error::ErrNotFound)
+            Err(super::Error::ErrNotFound(format!("can't find driver {}", exchange)))
         }
     }
 }
@@ -27,8 +26,7 @@ pub fn create_symbol_parser(exchange: &str, config: &Settings) -> Result<Box<dyn
     match exchange {
         "binance" => Ok(Box::new(binance::Rest::new(&config.binance.api_key))),
         _ => {
-            println!("i dont know");
-            Err(super::Error::ErrNotFound)
+            Err(super::Error::ErrNotFound(format!("can't find driver {}", exchange)))
         }
     }
 }

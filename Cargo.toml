@@ -18,6 +18,7 @@ tokio = {version = "1.5", features = ["rt-multi-thread", "macros"]}
 reqwest = {version = "0.11.3", features = ["json"]}
 async-trait = {version = "0.1.5"}
 humantime-serde = {version = "1.0"}
+futures = {version = "0.3.14"}
 
 [features]
 static_ssl = ["openssl/vendored"]

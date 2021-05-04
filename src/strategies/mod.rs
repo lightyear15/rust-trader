@@ -20,13 +20,26 @@ pub trait Strategy {
     fn exchange(&self) -> &str;
     fn symbol(&self) -> &str;
     fn time_frame(&self) -> &chrono::Duration;
+
+    fn new_order(&self, refer :Option<i32>) -> orders::Order {
+        orders::Order {
+            o_type: orders::Type::Market,
+            side: orders::Side::Buy,
+            volume : 0.0,
+
+            expire: None,
+            exchange : String::from(self.exchange()),
+            symbol : String::from(self.symbol()),
+            reference: refer.unwrap_or_else(rand::random::<i32>),
+        }
+    }
 }
 
 pub fn create(strategy: &str, exch: String, sym :String, time_frame :chrono::Duration) -> Result<Box<dyn Strategy>, Error> {
     match strategy {
         "sample" => Ok(Box::new(Sample::new(exch, sym, time_frame))),
         "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame))),
-        _ => Err(Error::ErrNotFound),
+        _ => Err(Error::ErrNotFound(format!("can't find strategy {}", strategy))),
     }
 }
 
@@ -63,5 +76,14 @@ impl Statistics {
         if balance > self.highest_balance {
             self.highest_balance = balance
         }
+    }
+    pub fn update_with_transaction(&mut self, tx: &orders::Transaction) {
+        self.transactions += 1;
+    }
+    pub fn update_with_order(&mut self, tx: &orders::Order) {
+        self.orders += 1;
+    }
+    pub fn update_with_expired_order(&mut self, tx: &orders::Order) {
+        self.canceled_orders += 1;
     }
 }

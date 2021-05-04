@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![feature(drain_filter)]
 
 use chrono::{Duration, NaiveDateTime};
 use rand::Rng;
@@ -25,7 +24,7 @@ pub use backtest::backtest;
 
 #[derive(Debug)]
 pub enum Error {
-    ErrNotFound,
+    ErrNotFound(String),
     ErrTimeFrameNotSupported,
     Unexpected(Box<dyn std::error::Error>),
     Unknown,       // to be removed

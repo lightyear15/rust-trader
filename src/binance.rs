@@ -122,6 +122,6 @@ impl drivers::SymbolParser for Rest {
             .drain(0..)
             .find(|sym_info| sym_info.symbol == sym)
             .map(|sym_info| sym_info.into())
-            .ok_or(Error::ErrNotFound)
+            .ok_or(Error::ErrNotFound(format!("can't find symbol {}", sym)))
     }
 }

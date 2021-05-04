@@ -31,7 +31,6 @@ impl Strategy for BuyDips {
                 expire: None,
                 reference: 0,
             };
-            println!("buying the dip at {} !!!", current_price);
             return Action::NewOrder(order);
         }
         Action::None
