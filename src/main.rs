@@ -97,6 +97,7 @@ async fn import(
     start: &NaiveDate,
     end: &NaiveDate,
 ) -> u64 {
+    // TODO: check if candles already exists
     println!("importing candles for {} days", end.signed_duration_since(*start).num_days());
     let mut total: u64 = 0;
     let mut tstamp = start.and_hms(0, 0, 0);

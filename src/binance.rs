@@ -86,6 +86,7 @@ impl drivers::Importer for Rest {
             .await
             .expect("in send binance klines request")
             .json::<Vec<Candle>>()
+            .limit(128_000_000)
             .await
             .expect("in json<Vec<Candle>>")
             .iter()
@@ -112,6 +113,7 @@ impl drivers::SymbolParser for Rest {
             .await
             .expect("in send binance exchange info request")
             .json::<ExchangeInfo>()
+            .limit(128_000_000)
             .await
             .expect("in json::<ExchangeInfo>");
 
