@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use std::vec::Vec;
 
-#[async_trait]
-pub trait Importer: std::fmt::Debug {
+#[async_trait(?Send)]
+pub trait Importer {
     async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle>;
 }
 
@@ -17,8 +17,8 @@ pub fn create_importer(exchange: &str, config: &ExchangeSettings) -> Result<Box<
     }
 }
 
-#[async_trait]
-pub trait SymbolParser: std::fmt::Debug {
+#[async_trait(?Send)]
+pub trait SymbolParser {
     async fn get_symbol(&self, sym: &str) -> Result<Symbol, Error>;
 }
 
@@ -37,7 +37,7 @@ pub enum LiveSpotMessage {
     Candle(String, candles::Candle)
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait LiveExchange {
     async fn next(&mut self) -> LiveSpotMessage;
     async fn submit(&self, order :&orders::Order);

@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use structopt::StructOpt;
 use trader::{backtest, configuration, drivers, storage, strategies};
+use actix_rt::System;
 
 #[derive(Debug, StructOpt)]
 enum Trade {
@@ -23,10 +24,11 @@ enum Trade {
     Live {},
 }
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() {
     let settings = configuration::Settings::get_configuration("trader.toml").expect("Failed at reading configuration");
     let opt = Trade::from_args();
+    let rt = System::current();
     match opt {
         Trade::Import {
             exchange,
@@ -36,7 +38,7 @@ async fn main() {
         } => {
             let exc_sett = settings.exchanges.get(&exchange).expect("can't find the exchange in config");
             let driver = drivers::create_importer(&exchange, &exc_sett).expect("exchange not found");
-            let storage = storage::Candles::new(&settings.candle_storage).await;
+            let storage = storage::Candles::new(&settings.candle_storage, rt.arbiter()).await;
             let res = import(driver.as_ref(), &storage, &exchange, &symbol, &start, &end).await;
             println!("downloaded {} candles", res);
         }
@@ -47,7 +49,7 @@ async fn main() {
             start,
             end,
         } => {
-            let storage = storage::Candles::new(&settings.candle_storage).await;
+            let storage = storage::Candles::new(&settings.candle_storage, rt.arbiter()).await;
             let cfg = settings
                 .strategies
                 .iter()

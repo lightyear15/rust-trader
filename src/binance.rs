@@ -1,10 +1,9 @@
 use super::{candles, drivers, Error, Symbol};
+use actix::{Actor, ActorContext, AsyncContext, Running};
+use actix_web_actors::ws;
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, HOST, USER_AGENT};
-use reqwest::Client;
-use tokio_tungstenite::{WebSocketStream, MaybeTlsStream};
-use tokio::net::TcpStream;
+use std::time::Instant;
 
 #[derive(Debug, serde::Deserialize)]
 struct Candle {
@@ -40,31 +39,30 @@ struct SymbolInfo {
     quote_precision: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Rest {
-    default_headers: HeaderMap,
     url: String,
     api_key: String,
-    client: Client,
+    client: awc::Client,
 }
 
 impl Rest {
     pub fn new(api_key: &str) -> Rest {
-        let mut default_headers = HeaderMap::new();
-        default_headers.insert(USER_AGENT, HeaderValue::from_static("trader/0.0.1"));
-        default_headers.insert(HOST, HeaderValue::from_static("api.binance.com"));
-        default_headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
+        let client = awc::Client::builder()
+            .header("User-Agent", "trader/0.0.1")
+            .header("Host", "api.binance.com")
+            .header("Accept", "*/*")
+            .finish();
         Rest {
-            default_headers,
             url: String::from("https://api.binance.com"),
             //url: String::from("http://localhost:8080"),
-            client: Client::new(),
+            client,
             api_key: String::from(api_key),
         }
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl drivers::Importer for Rest {
     async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle> {
         let start_str = format!("{}000", start.timestamp());
@@ -72,15 +70,15 @@ impl drivers::Importer for Rest {
         let request = self
             .client
             .get(url)
-            .headers(self.default_headers.clone())
-            //.header("X-MBX-APIKEY", &self.api_key)
+            .set_header("X-MBX-APIKEY", self.api_key.as_str())
             .query(&[
                 ("symbol", sym),
                 ("interval", "1m"),
                 ("startTime", &start_str),
                 ("limit", "1000"),
                 //("limit", "10"),
-            ]);
+            ])
+            .expect("in adding queries");
         request
             .send()
             .await
@@ -102,11 +100,11 @@ impl drivers::Importer for Rest {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl drivers::SymbolParser for Rest {
     async fn get_symbol(&self, sym: &str) -> Result<Symbol, Error> {
         let url = self.url.clone() + "/api/v3/exchangeInfo";
-        let request = self.client.get(url).headers(self.default_headers.clone());
+        let request = self.client.get(url);
         let mut info = request
             .send()
             .await
@@ -115,7 +113,9 @@ impl drivers::SymbolParser for Rest {
             .await
             .expect("in json::<ExchangeInfo>");
 
-        let x = info.symbols.drain(0..)
+        let x = info
+            .symbols
+            .drain(0..)
             .find(|sym_info| sym_info.symbol == sym)
             .map(to_symbol)
             .ok_or_else(|| Error::ErrNotFound(format!("can't find symbol {}", sym)));
@@ -123,19 +123,100 @@ impl drivers::SymbolParser for Rest {
     }
 }
 
-fn to_symbol(sym : SymbolInfo) -> Symbol {
-        Symbol {
-            pretty: format!("{}-{}", &sym.base, &sym.quote),
-            symbol: sym.symbol,
-            base: sym.base,
-            base_decimals: sym.base_precision,
-            quote: sym.quote,
-            quote_decimals: sym.quote_precision,
-        }
+fn to_symbol(sym: SymbolInfo) -> Symbol {
+    Symbol {
+        pretty: format!("{}-{}", &sym.base, &sym.quote),
+        symbol: sym.symbol,
+        base: sym.base,
+        base_decimals: sym.base_precision,
+        quote: sym.quote,
+        quote_decimals: sym.quote_precision,
+    }
 }
 
+struct Tick {
+    sym: String,
+    interval: Duration,
+}
 
 pub struct Live {
-    rest : Rest,
-    ws :  WebSocketStream<MaybeTlsStream<TcpStream>>,
+    ticks: Vec<Tick>,
+    url: String,
+    api_key: String,
+    secret_key: String,
+    hb: Instant,
+    //client: awc::Client,
 }
+
+impl Actor for Live {
+    type Context = ws::WebsocketContext<Self>;
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.run_interval(Duration::hours(24).to_std().unwrap(), |act, ctx| {});
+    }
+    fn stopping(&mut self, _: &mut Self::Context) -> Running {
+        Running::Stop
+    }
+}
+
+impl Live {
+    pub fn new() -> Self {
+        Self {
+            hb: Instant::now(),
+            ticks: Vec::new(),
+            url: String::new(),
+            api_key: String::new(),
+            secret_key: String::new(),
+        }
+    }
+    fn hb(&self, cont: &mut ws::WebsocketContext<Self>) {
+        // TODO find min among ticks
+        let hb_inte = Duration::hours(24).to_std().unwrap();
+        let max_ttl = Duration::minutes(3).to_std().unwrap();
+        cont.run_interval(hb_inte, move |act, ctx| {
+            let nnow = Instant::now();
+            if nnow.duration_since(act.hb) > max_ttl {
+                println!("Disconnecting failed heartbeat");
+                ctx.stop();
+                return;
+            }
+
+            ctx.ping(b"hello");
+        });
+    }
+}
+
+impl actix::StreamHandler<Result<ws::Message, ws::ProtocolError>> for Live {
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        match msg {
+            Ok(ws::Message::Ping(b)) => {
+                self.hb = Instant::now();
+                ctx.pong(&b);
+            }
+            Ok(ws::Message::Pong(_)) => {
+                self.hb = Instant::now();
+            }
+            Ok(ws::Message::Close(reason)) => {
+                ctx.close(reason);
+                ctx.stop();
+            }
+            Ok(ws::Message::Text(text)) => {
+                self.hb = Instant::now();
+            }
+            Ok(_) => {
+                println!("don't really know what to do");
+            }
+            Err(e) => {
+                panic!("binance Live {}", e);
+            }
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "bool")]
+pub struct Subscribe {
+    pub ticks :Vec<Tick>,
+    pub listen_key : String,
+}
+
+impl actix::Handler<
