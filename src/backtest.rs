@@ -1,6 +1,9 @@
-use super::orders::{Order, Side, Transaction, Type};
-use super::strategies::{Action, Statistics};
-use super::{candles::Candle, storage, wallets, Error, SpotSinglePairStrategy};
+use crate::candles::Candle;
+use crate::error::Error;
+use crate::orders::{Order, Side, Transaction, Type};
+use crate::strategies::{Action, Statistics};
+use crate::{storage, utils, wallets};
+use crate::strategies::SpotSinglePairStrategy;
 use chrono::{Duration, NaiveDate};
 
 pub async fn backtest(
@@ -141,7 +144,7 @@ async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> 
                 .await
                 .ok_or_else(|| Error::ErrNotFound(format!("can't find lower for {}", *buy_p)))?;
             tx.avg_price = *buy_p;
-            tx.tstamp = super::generate_random_tstamp(&t, &(t + Duration::minutes(1)));
+            tx.tstamp = utils::generate_random_tstamp(&t, &(t + Duration::minutes(1)));
             Ok(tx)
         }
         (Type::Limit(sell_p), Side::Sell) => {
@@ -150,7 +153,7 @@ async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> 
                 .await
                 .ok_or_else(|| Error::ErrNotFound(format!("can't find higher for {}", *sell_p)))?;
             tx.avg_price = *sell_p;
-            tx.tstamp = super::generate_random_tstamp(&t, &(t + Duration::minutes(1)));
+            tx.tstamp = utils::generate_random_tstamp(&t, &(t + Duration::minutes(1)));
             Ok(tx)
         } //(_, _) => Err(Error::Done),
     }

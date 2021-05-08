@@ -1,5 +1,7 @@
-use super::{ orders, Error, candles::Candle, wallets::SpotPairWallet};
-use super::orders::{Order, Transaction};
+use crate::candles::Candle;
+use crate::error::Error;
+use crate::wallets::SpotPairWallet;
+use crate::orders::{Order, Transaction, Type, Side};
 
 pub mod sample;
 pub mod buy_dips;
@@ -23,10 +25,10 @@ pub trait SpotSinglePairStrategy {
     fn symbol(&self) -> &str;
     fn time_frame(&self) -> &chrono::Duration;
 
-    fn new_order(&self, refer :Option<i32>) -> orders::Order {
-        orders::Order {
-            o_type: orders::Type::Market,
-            side: orders::Side::Buy,
+    fn new_order(&self, refer :Option<i32>) -> Order {
+        Order {
+            o_type: Type::Market,
+            side: Side::Buy,
             volume : 0.0,
 
             expire: None,
@@ -79,13 +81,13 @@ impl Statistics {
             self.highest_balance = balance
         }
     }
-    pub fn update_with_transaction(&mut self, _tx: &orders::Transaction) {
+    pub fn update_with_transaction(&mut self, _tx: &Transaction) {
         self.transactions += 1;
     }
-    pub fn update_with_order(&mut self, _ord: &orders::Order) {
+    pub fn update_with_order(&mut self, _ord: &Order) {
         self.orders += 1;
     }
-    pub fn update_with_expired_order(&mut self, _ord: &orders::Order) {
+    pub fn update_with_expired_order(&mut self, _ord: &Order) {
         self.canceled_orders += 1;
     }
 }

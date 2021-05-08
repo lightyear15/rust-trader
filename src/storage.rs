@@ -7,11 +7,11 @@ pub struct Candles {
 }
 
 impl Candles {
-    pub async fn new(host: &str, arbiter: &actix_rt::ArbiterHandle) -> Candles {
+    pub async fn new(host: &str) -> Candles {
         let (client, connection) = tokio_postgres::connect(host, NoTls)
             .await
             .expect("when connecting to postgres");
-        arbiter.spawn(async move {
+        actix_rt::Arbiter::spawn(async move {
             if let Err(e) = connection.await {
                 eprintln!("connection error: {}", e);
             }

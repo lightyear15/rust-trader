@@ -1,4 +1,4 @@
-use chrono::{ NaiveDateTime};
+use chrono::NaiveDateTime;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TimeInForce {
@@ -46,9 +46,9 @@ pub struct Order {
 impl Default for Order {
     fn default() -> Self {
         Order {
-            exchange : String::new(),
-            symbol :String::new(),
-            side : Side::Buy,
+            exchange: String::new(),
+            symbol: String::new(),
+            side: Side::Buy,
             o_type: Type::Market,
             volume: 0.0,
             expire: None,
@@ -68,14 +68,13 @@ pub struct Transaction {
 }
 impl Default for Transaction {
     fn default() -> Self {
-        Transaction{
-            symbol : String::new(),
-            side : Side::Buy,
+        Transaction {
+            symbol: String::new(),
+            side: Side::Buy,
             avg_price: 0.0,
             volume: 0.0,
-            tstamp : chrono::naive::MAX_DATETIME, // never in the future
-            order : Order::default(),
+            tstamp: chrono::naive::MAX_DATETIME, // never in the future
+            order: Order::default(),
         }
     }
 }
-

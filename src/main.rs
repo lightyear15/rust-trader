@@ -1,7 +1,22 @@
+#![allow(dead_code)]
+
 use chrono::NaiveDate;
 use structopt::StructOpt;
-use trader::{backtest, configuration, drivers, storage, strategies};
-use actix_rt::System;
+
+mod configuration;
+mod drivers;
+mod storage;
+mod strategies;
+mod backtest;
+mod wallets;
+mod utils;
+mod orders;
+mod error;
+mod candles;
+mod binance;
+mod symbol;
+use crate::configuration::Settings;
+use crate::backtest::backtest;
 
 #[derive(Debug, StructOpt)]
 enum Trade {
@@ -24,11 +39,10 @@ enum Trade {
     Live {},
 }
 
-#[actix_rt::main]
+#[actix_web::main]
 async fn main() {
-    let settings = configuration::Settings::get_configuration("trader.toml").expect("Failed at reading configuration");
+    let settings = Settings::get_configuration("trader.toml").expect("Failed at reading configuration");
     let opt = Trade::from_args();
-    let rt = System::current();
     match opt {
         Trade::Import {
             exchange,
@@ -38,7 +52,7 @@ async fn main() {
         } => {
             let exc_sett = settings.exchanges.get(&exchange).expect("can't find the exchange in config");
             let driver = drivers::create_importer(&exchange, &exc_sett).expect("exchange not found");
-            let storage = storage::Candles::new(&settings.candle_storage, rt.arbiter()).await;
+            let storage = storage::Candles::new(&settings.candle_storage).await;
             let res = import(driver.as_ref(), &storage, &exchange, &symbol, &start, &end).await;
             println!("downloaded {} candles", res);
         }
@@ -49,7 +63,7 @@ async fn main() {
             start,
             end,
         } => {
-            let storage = storage::Candles::new(&settings.candle_storage, rt.arbiter()).await;
+            let storage = storage::Candles::new(&settings.candle_storage).await;
             let cfg = settings
                 .strategies
                 .iter()

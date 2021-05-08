@@ -1,4 +1,6 @@
-use super::{candles, drivers, Error, Symbol};
+use crate::error::Error;
+use crate::symbol::Symbol;
+use crate::{candles, drivers};
 use actix::{Actor, ActorContext, AsyncContext, Running};
 use actix_web_actors::ws;
 use async_trait::async_trait;
@@ -211,12 +213,3 @@ impl actix::StreamHandler<Result<ws::Message, ws::ProtocolError>> for Live {
         }
     }
 }
-
-#[derive(Message)]
-#[rtype(result = "bool")]
-pub struct Subscribe {
-    pub ticks :Vec<Tick>,
-    pub listen_key : String,
-}
-
-impl actix::Handler<

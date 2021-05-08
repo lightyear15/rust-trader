@@ -1,6 +1,7 @@
-use super::{SpotSinglePairStrategy, Action};
-use super::{  Candle, SpotPairWallet};
-use super::orders::{Order, Transaction};
+use crate::wallets::SpotPairWallet;
+use crate::candles::Candle;
+use crate::orders::{Order, Transaction};
+use crate::strategies::{SpotSinglePairStrategy, Action};
 
 #[derive(Clone)]
 pub struct Sample {

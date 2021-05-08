@@ -7,22 +7,17 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-config = {version = "0.11.0"}
-serde = {version = "1.0", features = ["derive", "std"]}
-rand = {version = "0.8.3"}
+config = {version = "0.11"}
+serde = {version = "1", features = ["derive", "std"]}
+rand = {version = "0.8"}
 chrono = {version = "0.4", features = ["serde"]}
 structopt = { version = "0.3", default-features = false }
-tokio-postgres = {version = "0.7.1", features = ["with-chrono-0_4"]}
-async-trait = {version = "0.1.5"}
-humantime-serde = {version = "1.0"}
-futures = {version = "0.3.14"}
-awc = {version = "2.0.3"}
-actix-rt = {version = "2.2.0"}
+tokio-postgres = {version = "0.5", features = ["with-chrono-0_4", "runtime"]}
+async-trait = {version = "0.1"}
+humantime-serde = {version = "1"}
+#futures = {version = "0.3"}
+actix-web = {version = "3.3"}
+actix-rt = {version = "1.1"}
 actix = {version = "0.10"}
 actix-web-actors = {version = "3"}
-actix-web = {version = "3.2.0"}
-
-[features]
-static_ssl = ["openssl/vendored"]
-[dependencies.openssl]
-optional = true
+awc = {version = "2.0"}
