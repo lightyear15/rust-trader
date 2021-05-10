@@ -13,7 +13,7 @@ pub trait Importer {
 
 pub fn create_importer(exchange: &str, config: &ExchangeSettings) -> Result<Box<dyn Importer>, Error> {
     match exchange {
-        "binance" => Ok(Box::new(binance::Rest::new(&config.api_key))),
+        "binance" => Ok(Box::new(binance::Rest::new(&config.api_key, &config.secret_key))),
         _ => {
             Err(Error::ErrNotFound(format!("can't find driver {}", exchange)))
         }
@@ -27,7 +27,7 @@ pub trait SymbolParser {
 
 pub fn create_symbol_parser(exchange: &str, config: &ExchangeSettings) -> Result<Box<dyn SymbolParser>, Error> {
     match exchange {
-        "binance" => Ok(Box::new(binance::Rest::new(&config.api_key))),
+        "binance" => Ok(Box::new(binance::Rest::new(&config.api_key, &config.secret_key))),
         _ => {
             Err(Error::ErrNotFound(format!("can't find driver {}", exchange)))
         }
