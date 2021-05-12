@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 config = {version = "0.11"}
 serde = {version = "1", features = ["derive", "std"]}
+serde_json = {version = "1"}
 rand = {version = "0.8"}
 chrono = {version = "0.4", features = ["serde"]}
 structopt = { version = "0.3", default-features = false }
@@ -16,7 +17,7 @@ tokio-postgres = {version = "0.5", features = ["with-chrono-0_4", "runtime"]}
 async-trait = {version = "0.1"}
 humantime-serde = {version = "1"}
 humantime = {version = "2"}
-#futures = {version = "0.3"}
+futures-util = {version = "0.3"}
 actix-web = {version = "3.3"}
 actix-rt = {version = "1.1"}
 actix-codec = {version = "0.3"}

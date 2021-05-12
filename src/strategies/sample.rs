@@ -18,6 +18,9 @@ impl Sample {
 }
 
 impl SpotSinglePairStrategy for Sample {
+    fn name(&self) -> String {
+        format!("Sample-{}-{}-{}",self.exchange, self.sym, self.time_frame.to_string())
+    }
     fn on_new_candle(&mut self, _wallet :&SpotPairWallet, _outstanding_orders: &[Order], history : &[Candle]) -> Action{
         println!("at iteration {}", self.index);
         for c in history {

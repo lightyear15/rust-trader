@@ -2,21 +2,23 @@
 
 use chrono::NaiveDate;
 use structopt::StructOpt;
+use std::thread;
 
+mod backtest;
+mod binance;
+mod candles;
 mod configuration;
 mod drivers;
+mod error;
+mod live;
+mod orders;
 mod storage;
 mod strategies;
-mod backtest;
-mod wallets;
-mod utils;
-mod orders;
-mod error;
-mod candles;
-mod binance;
 mod symbol;
-use crate::configuration::Settings;
+mod utils;
+mod wallets;
 use crate::backtest::backtest;
+use crate::configuration::Settings;
 
 #[derive(Debug, StructOpt)]
 enum Trade {
@@ -51,7 +53,7 @@ async fn main() {
             end,
         } => {
             let exc_sett = settings.exchanges.get(&exchange).expect("can't find the exchange in config");
-            let driver = drivers::create_importer(&exchange, &exc_sett).expect("exchange not found");
+            let driver = drivers::create_rest_client(&exchange, &exc_sett).await.expect("exchange not found");
             let storage = storage::Candles::new(&settings.candle_storage).await;
             let res = import(driver.as_ref(), &storage, &exchange, &symbol, &start, &end).await;
             println!("downloaded {} candles", res);
@@ -77,20 +79,23 @@ async fn main() {
         Trade::Live {} => {
             for strat in settings.strategies {
                 let exc_sett = settings.exchanges.get(&strat.exchange).expect("can't find the exchange in config");
-                let symbol = drivers::create_symbol_parser(&strat.exchange, exc_sett)
-                    .expect("exchange not found")
-                    .get_symbol(&strat.symbol)
+                let tick: Vec<_> = vec![drivers::Tick {
+                    sym: strat.symbol.clone(),
+                    interval: strat.time_frame,
+                }];
+                let (rest, live) = drivers::create_live_drivers(&strat.exchange, exc_sett, tick.as_slice())
                     .await
-                    .expect("symbol not found");
-
-                println!("starting strategy {} for {} on {}", strat.name, symbol.to_string(), strat.exchange);
+                    .expect("could not create exchange drivers");
+                let strategy =
+                    strategies::create(&strat.name, strat.exchange, strat.symbol, strat.time_frame).expect("strategies::create");
+                live::run_live(rest, live, strategy).await;
             }
         }
     };
 }
 
 async fn import(
-    driver: &dyn drivers::Importer,
+    driver: &dyn drivers::RestApi,
     storage: &storage::Candles,
     exchange: &str,
     sym: &str,

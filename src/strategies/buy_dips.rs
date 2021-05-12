@@ -21,6 +21,9 @@ impl BuyDips {
 }
 
 impl SpotSinglePairStrategy for BuyDips {
+    fn name(&self) -> String {
+        format!("BuyDips-{}-{}-{}",self.exchange, self.sym, self.time_frame.to_string())
+    }
     fn on_new_candle(&mut self, wallet :&SpotPairWallet, _outstanding_orders: &[Order], history : &[Candle]) -> Action{
         let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
         let current_price = history.last().expect("last candle").close;
