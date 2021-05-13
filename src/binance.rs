@@ -1,7 +1,8 @@
 use crate::candles;
 use crate::drivers::{LiveEvent, LiveFeed, RestApi, Tick};
 use crate::error::Error;
-use crate::orders::Order;
+use crate::orders;
+use crate::orders::{Order, Transaction};
 use crate::symbol::Symbol;
 use async_trait::async_trait;
 use awc::ws::{Codec, Frame};
@@ -51,15 +52,14 @@ impl RestApi for Rest {
         } else {
             self.client.post(url)
         };
-        let key = request
+        request
             .send()
             .await
             .expect("in sending listen_key request")
             .json::<ListenKey>()
             .await
             .expect("in parsing userDataStream response")
-            .listen_key;
-        key
+            .listen_key
     }
 
     async fn get_symbol_info(&self, sym: &str) -> Result<Symbol, Error> {
@@ -78,7 +78,7 @@ impl RestApi for Rest {
             .symbols
             .drain(0..)
             .find(|sym_info| sym_info.symbol == sym)
-            .map(to_symbol)
+            .map(|info| info.into())
             .ok_or_else(|| Error::ErrNotFound(format!("can't find symbol {}", sym)));
         x
     }
@@ -100,8 +100,8 @@ impl RestApi for Rest {
             .limit(128_000_000)
             .await
             .expect("in json<Vec<Candle>>")
-            .iter()
-            .map(to_candle)
+            .drain(0..)
+            .map(|cnd| cnd.into())
             .collect()
     }
 }
@@ -155,8 +155,13 @@ impl LiveFeed for Live {
                     match mesg.data {
                         LiveMessageType::LiveCandle(candle_msg) => {
                             if candle_msg.candle.kline_close {
-                                let candle = to_candle_from_live(&candle_msg);
-                                return LiveEvent::Candle(candle_msg.symbol, candle);
+                                let symbol_name = candle_msg.symbol.clone();
+                                return LiveEvent::Candle(symbol_name, candle_msg.into());
+                            }
+                        }
+                        LiveMessageType::OrderUpdate(tx_msg) => {
+                            if matches!(tx_msg.order_status, OrderStatus::Filled) {
+                                return LiveEvent::Transaction(tx_msg.into());
                             }
                         }
                     }
@@ -173,26 +178,12 @@ impl LiveFeed for Live {
         }
     }
 
-    async fn submit(&self, order: &Order) {}
-    async fn cancel(&self, order_reference: i32) {}
+    async fn submit(&self, _order: &Order) {}
+    async fn cancel(&self, _order_reference: i32) {}
 }
 
-// --------------------------------
-// helper functions
-fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
-    let mut streams: Vec<_> = ticks
-        .into_iter()
-        .map(|tick| {
-            let mut dur = humantime::format_duration(tick.interval.to_std().expect("duration to std")).to_string();
-            dur.truncate(2);
-            let tt = format!("{}@kline_{}", tick.sym.to_ascii_lowercase(), dur);
-            tt
-        })
-        .collect();
-    streams.push(String::from(listen_key));
-    streams.join("/")
-}
-
+//---------------------------------
+// binance messages and objects
 #[derive(Debug, serde::Deserialize, Clone)]
 struct ExchangeInfo {
     symbols: Vec<SymbolInfo>,
@@ -209,17 +200,6 @@ struct SymbolInfo {
     #[serde(alias = "quoteAssetPrecision")]
     quote_precision: usize,
 }
-fn to_symbol(sym: SymbolInfo) -> Symbol {
-    Symbol {
-        pretty: format!("{}-{}", &sym.base, &sym.quote),
-        symbol: sym.symbol,
-        base: sym.base,
-        base_decimals: sym.base_precision,
-        quote: sym.quote,
-        quote_decimals: sym.quote_precision,
-    }
-}
-
 #[derive(Debug, serde::Deserialize)]
 struct Candle {
     open_time: u64,
@@ -232,24 +212,11 @@ struct Candle {
     quote_asset_volume: String,
     number_of_trades: u32,
 }
-fn to_candle(cnd: &Candle) -> candles::Candle {
-    candles::Candle {
-        open: cnd.open.parse::<f64>().expect("in cnd.open"),
-        low: cnd.low.parse::<f64>().expect("in cnd.low"),
-        high: cnd.high.parse::<f64>().expect("in cnd.high"),
-        close: cnd.close.parse::<f64>().expect("in cnd.close"),
-        volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
-        tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
-        tframe: Duration::minutes(1),
-    }
-}
-
 #[derive(Debug, serde::Deserialize, Clone)]
 struct ListenKey {
     #[serde(alias = "listenKey")]
     listen_key: String,
 }
-
 #[derive(Debug, serde::Deserialize)]
 struct LiveCandle {
     //{"t":1620831000000,"T":1620831059999,"s":"BTCEUR","i":"1m","f":44491152,"L":44491273,"o":"46595.80000000","c":"46579.23000000","h":"46640.08000000","l":"46564.13000000","v":"2.23355400","n":122,"x":false,"q":"104071.79012531","V":"1.21994100","Q":"56842.26545704","B":"0"}
@@ -284,29 +251,137 @@ struct LiveCandleMsg {
     #[serde(alias = "k")]
     candle: LiveCandle,
 }
+#[derive(Debug, serde::Deserialize)]
+pub enum Side {
+    #[serde(alias = "BUY")]
+    Buy,
+    #[serde(alias = "SELL")]
+    Sell,
+}
+#[derive(Debug, serde::Deserialize)]
+enum OrderStatus {
+    #[serde(alias = "NEW")]
+    New,
+    #[serde(alias = "PARTIALLY_FILLED")]
+    PartiallyFilled,
+    #[serde(alias = "FILLED")]
+    Filled,
+    #[serde(alias = "CANCELED")]
+    Canceled,
+    #[serde(alias = "PENDING_CANCEL")]
+    PendingCancel,
+    #[serde(alias = "REJECTED")]
+    Rejected,
+    #[serde(alias = "EXPIRED")]
+    Expired,
+}
+#[derive(Debug, serde::Deserialize)]
+struct LiveOrderUpdate {
+    #[serde(alias = "E")]
+    tstamp: u64,
+    #[serde(alias = "s")]
+    symbol: String,
+    #[serde(alias = "c")]
+    order_id: String,
+    #[serde(alias = "X")]
+    order_status: OrderStatus,
+    #[serde(alias = "S")]
+    side: Side,
+    #[serde(alias = "Z")]
+    cumulative_price: String,
+    #[serde(alias = "z")]
+    cumulative_quantity: String,
 
+}
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum LiveMessageType {
     LiveCandle(LiveCandleMsg),
+    OrderUpdate(LiveOrderUpdate),
 }
-
 #[derive(Debug, serde::Deserialize)]
 struct LiveMessage {
     //{"stream":"btceur@kline_1m","data": {}}
     stream: String,
     data: LiveMessageType,
 }
-
-fn to_candle_from_live(msg: &LiveCandleMsg) -> candles::Candle {
-    candles::Candle {
-        open: msg.candle.open.parse::<f64>().expect("in cnd.open"),
-        low: msg.candle.low.parse::<f64>().expect("in cnd.low"),
-        high: msg.candle.high.parse::<f64>().expect("in cnd.high"),
-        close: msg.candle.close.parse::<f64>().expect("in cnd.close"),
-        volume: msg.candle.volume.parse::<f64>().expect("in cnd.volume"),
-        tstamp: NaiveDateTime::from_timestamp((msg.candle.tstamp_open / 1000) as i64, 0),
-        tframe: Duration::from_std(humantime::parse_duration(&msg.candle.interval).expect("could not parse interval in live candle"))
+// --------------------------------
+// helper functions
+fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
+    let mut streams: Vec<_> = ticks
+        .into_iter()
+        .map(|tick| {
+            let mut dur = humantime::format_duration(tick.interval.to_std().expect("duration to std")).to_string();
+            dur.truncate(2);
+            let tt = format!("{}@kline_{}", tick.sym.to_ascii_lowercase(), dur);
+            tt
+        })
+        .collect();
+    streams.push(String::from(listen_key));
+    streams.join("/")
+}
+impl std::convert::From<SymbolInfo> for Symbol {
+    fn from(info: SymbolInfo) -> Self {
+        Self {
+            pretty: format!("{}-{}", &info.base, &info.quote),
+            symbol: info.symbol,
+            base: info.base,
+            base_decimals: info.base_precision,
+            quote: info.quote,
+            quote_decimals: info.quote_precision,
+        }
+    }
+}
+impl std::convert::From<Candle> for candles::Candle {
+    fn from(cnd: Candle) -> Self {
+        Self {
+            open: cnd.open.parse::<f64>().expect("in cnd.open"),
+            low: cnd.low.parse::<f64>().expect("in cnd.low"),
+            high: cnd.high.parse::<f64>().expect("in cnd.high"),
+            close: cnd.close.parse::<f64>().expect("in cnd.close"),
+            volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
+            tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
+            tframe: Duration::minutes(1),
+        }
+    }
+}
+impl std::convert::From<LiveCandleMsg> for candles::Candle {
+    fn from(msg: LiveCandleMsg) -> Self {
+        Self {
+            open: msg.candle.open.parse::<f64>().expect("in cnd.open"),
+            low: msg.candle.low.parse::<f64>().expect("in cnd.low"),
+            high: msg.candle.high.parse::<f64>().expect("in cnd.high"),
+            close: msg.candle.close.parse::<f64>().expect("in cnd.close"),
+            volume: msg.candle.volume.parse::<f64>().expect("in cnd.volume"),
+            tstamp: NaiveDateTime::from_timestamp((msg.candle.tstamp_open / 1000) as i64, 0),
+            tframe: Duration::from_std(
+                humantime::parse_duration(&msg.candle.interval).expect("could not parse interval in live candle"),
+            )
             .expect("to chrono"),
+        }
+    }
+}
+impl std::convert::From<Side> for orders::Side {
+    fn from(side: Side) -> Self {
+        match side {
+            Side::Buy => orders::Side::Buy,
+            Side::Sell => orders::Side::Sell,
+        }
+    }
+}
+impl std::convert::From<LiveOrderUpdate> for Transaction {
+    fn from(msg: LiveOrderUpdate) -> Self {
+        let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
+        let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
+        Self { 
+            tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
+            symbol: msg.symbol,
+            side: msg.side.into(),
+            avg_price: tot_price / tot_quantity,
+            order: Order {
+                volume: 
+            
+            }
+        }
     }
 }
