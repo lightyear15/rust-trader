@@ -1,5 +1,6 @@
+use std::collections::HashMap;
+
 #[derive(Debug)]
-pub struct SpotPairWallet {
-    pub base: f64,
-    pub quote: f64,
+pub struct SpotWallet {
+    pub assets: HashMap<String, f64>,
 }

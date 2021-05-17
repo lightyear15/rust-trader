@@ -1,12 +1,13 @@
 use crate::candles::Candle;
 use crate::error::Error;
-use crate::wallets::SpotPairWallet;
-use crate::orders::{Order, Transaction, Type, Side};
+use crate::orders::{Order, Side, Transaction, Type};
+use crate::symbol::Symbol;
+use crate::wallets::SpotWallet;
 
-pub mod sample;
 pub mod buy_dips;
-pub use sample::Sample;
+pub mod sample;
 pub use buy_dips::BuyDips;
+pub use sample::Sample;
 
 #[derive(Debug)]
 pub enum Action {
@@ -18,29 +19,34 @@ pub enum Action {
 // a 1-symbol strategy
 pub trait SpotSinglePairStrategy {
     fn name(&self) -> String;
-    fn on_new_candle(&mut self, wallet :&SpotPairWallet, outstanding_orders: &[Order], history : &[Candle]) -> Action;
-    fn on_new_transaction(&mut self, wallet :&SpotPairWallet, outstanding_orders: &[Order], tx: &Transaction) -> Action;
+    fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action;
+    fn on_new_transaction(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], tx: &Transaction) -> Action;
 
     fn get_candles_history_size(&self) -> usize;
     fn exchange(&self) -> &str;
     fn symbol(&self) -> &str;
     fn time_frame(&self) -> &chrono::Duration;
 
-    fn new_order(&self, refer :Option<i32>) -> Order {
+    fn new_order(&self, refer: Option<i32>) -> Order {
         Order {
             o_type: Type::Market,
             side: Side::Buy,
-            volume : 0.0,
+            volume: 0.0,
 
             expire: None,
-            exchange : String::from(self.exchange()),
-            symbol : String::from(self.symbol()),
+            exchange: String::from(self.exchange()),
+            symbol: String::from(self.symbol()),
             reference: refer.unwrap_or_else(rand::random::<i32>),
         }
     }
 }
 
-pub fn create(strategy: &str, exch: String, sym :String, time_frame :chrono::Duration) -> Result<Box<dyn SpotSinglePairStrategy>, Error> {
+pub fn create(
+    strategy: &str,
+    exch: String,
+    sym: Symbol,
+    time_frame: chrono::Duration,
+) -> Result<Box<dyn SpotSinglePairStrategy>, Error> {
     match strategy {
         "sample" => Ok(Box::new(Sample::new(exch, sym, time_frame))),
         "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame))),
@@ -48,16 +54,15 @@ pub fn create(strategy: &str, exch: String, sym :String, time_frame :chrono::Dur
     }
 }
 
-
 #[derive(Debug)]
 pub struct Statistics {
-    pub orders : usize,
-    pub transactions : usize,
+    pub orders: usize,
+    pub transactions: usize,
     pub canceled_orders: usize,
     pub balance_start: f64,
     pub balance: f64,
     pub lowest_balance: f64,
-    pub highest_balance : f64,
+    pub highest_balance: f64,
 }
 
 impl Statistics {
@@ -68,11 +73,11 @@ impl Statistics {
             canceled_orders: 0,
             balance_start,
             balance: balance_start,
-            lowest_balance : balance_start,
-            highest_balance: balance_start
+            lowest_balance: balance_start,
+            highest_balance: balance_start,
         }
     }
-    pub fn update_with_last_price(&mut self, wallet: &SpotPairWallet, pr: f64) {
+    pub fn update_with_last_prices(&mut self, wallet: &SpotWallet, sym: &str, pr: f64) {
         let balance = wallet.quote + wallet.base * pr;
         self.balance = balance;
         if balance < self.lowest_balance {

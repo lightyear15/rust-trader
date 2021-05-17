@@ -4,6 +4,7 @@ use crate::error::Error;
 use crate::orders;
 use crate::orders::{Order, Transaction};
 use crate::symbol::Symbol;
+use crate::wallets::SpotWallet;
 use async_trait::async_trait;
 use awc::ws::{Codec, Frame};
 use awc::{BoxedSocket, Client};
@@ -14,6 +15,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use serde_json;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Rest {
@@ -83,14 +85,18 @@ impl RestApi for Rest {
         x
     }
 
-    async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle> {
-        let start_str = format!("{}000", start.timestamp());
+    async fn get_candles(&self, sym: &str, interval: Option<&Duration>, start: Option<&NaiveDateTime>) -> Vec<candles::Candle> {
+        let mut queries: Vec<(String, String)> =
+            start.map_or(Vec::new(), |st| vec![(String::from("startTime"), format!("{}000", st.timestamp()))]);
+        queries.push((String::from("symbol"), String::from(sym)));
+        queries.push((String::from("interval"), to_interval(interval.unwrap_or(&Duration::minutes(1)))));
+        queries.push((String::from("limit"), String::from("1000")));
         let url = self.url.clone() + "/api/v3/klines";
         let request = self
             .client
             .get(url)
             .set_header("X-MBX-APIKEY", self.api_key.as_str())
-            .query(&[("symbol", sym), ("interval", "1m"), ("startTime", &start_str), ("limit", "1000")])
+            .query(&queries)
             .expect("in adding queries");
         request
             .send()
@@ -185,10 +191,6 @@ impl LiveFeed for Live {
 //---------------------------------
 // binance messages and objects
 #[derive(Debug, serde::Deserialize, Clone)]
-struct ExchangeInfo {
-    symbols: Vec<SymbolInfo>,
-}
-#[derive(Debug, serde::Deserialize, Clone)]
 struct SymbolInfo {
     symbol: String,
     #[serde(alias = "baseAsset")]
@@ -199,6 +201,10 @@ struct SymbolInfo {
     quote: String,
     #[serde(alias = "quoteAssetPrecision")]
     quote_precision: usize,
+}
+#[derive(Debug, serde::Deserialize, Clone)]
+struct ExchangeInfo {
+    symbols: Vec<SymbolInfo>,
 }
 #[derive(Debug, serde::Deserialize)]
 struct Candle {
@@ -219,7 +225,6 @@ struct ListenKey {
 }
 #[derive(Debug, serde::Deserialize)]
 struct LiveCandle {
-    //{"t":1620831000000,"T":1620831059999,"s":"BTCEUR","i":"1m","f":44491152,"L":44491273,"o":"46595.80000000","c":"46579.23000000","h":"46640.08000000","l":"46564.13000000","v":"2.23355400","n":122,"x":false,"q":"104071.79012531","V":"1.21994100","Q":"56842.26545704","B":"0"}
     #[serde(alias = "t")]
     tstamp_open: u64,
     #[serde(alias = "T")]
@@ -243,7 +248,6 @@ struct LiveCandle {
 }
 #[derive(Debug, serde::Deserialize)]
 struct LiveCandleMsg {
-    //{"e":"kline","E":1620831035519,"s":"BTCEUR","k":{}}
     #[serde(alias = "E")]
     tstamp_open: u64,
     #[serde(alias = "s")]
@@ -251,7 +255,7 @@ struct LiveCandleMsg {
     #[serde(alias = "k")]
     candle: LiveCandle,
 }
-#[derive(Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize)]
 pub enum Side {
     #[serde(alias = "BUY")]
     Buy,
@@ -291,13 +295,36 @@ struct LiveOrderUpdate {
     cumulative_price: String,
     #[serde(alias = "z")]
     cumulative_quantity: String,
-
+    // order related stuff
+    #[serde(alias = "q")]
+    order_quantity: String,
+    #[serde(alias = "p")]
+    order_price: String,
+    #[serde(alias = "o")]
+    order_type: String,
+}
+#[derive(Debug, serde::Deserialize)]
+struct LiveBalances {
+    #[serde(alias = "a")]
+    symbol: String,
+    #[serde(alias = "f")]
+    free: String,
+    #[serde(alias = "l")]
+    locked: String,
+}
+#[derive(Debug, serde::Deserialize)]
+struct LiveAccountUpdate {
+    #[serde(alias = "E")]
+    tstamp: u64,
+    #[serde(alias = "B")]
+    balances: Vec<LiveBalances>,
 }
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum LiveMessageType {
     LiveCandle(LiveCandleMsg),
     OrderUpdate(LiveOrderUpdate),
+    AccountUpdate(LiveAccountUpdate),
 }
 #[derive(Debug, serde::Deserialize)]
 struct LiveMessage {
@@ -307,15 +334,21 @@ struct LiveMessage {
 }
 // --------------------------------
 // helper functions
+fn to_interval(interval: &Duration) -> String {
+    if *interval == Duration::minutes(1) {
+        String::from("1m")
+    } else if *interval == Duration::days(1) {
+        String::from("1d")
+    } else if *interval == Duration::hours(1) {
+        String::from("1h")
+    } else {
+        panic!("duration unknown")
+    }
+}
 fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     let mut streams: Vec<_> = ticks
         .into_iter()
-        .map(|tick| {
-            let mut dur = humantime::format_duration(tick.interval.to_std().expect("duration to std")).to_string();
-            dur.truncate(2);
-            let tt = format!("{}@kline_{}", tick.sym.to_ascii_lowercase(), dur);
-            tt
-        })
+        .map(|tick| format!("{}@kline_{}", tick.sym.to_ascii_lowercase(), to_interval(&tick.interval)))
         .collect();
     streams.push(String::from(listen_key));
     streams.join("/")
@@ -373,15 +406,39 @@ impl std::convert::From<LiveOrderUpdate> for Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
-        Self { 
+        Self {
             tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
-            symbol: msg.symbol,
-            side: msg.side.into(),
+            symbol: msg.symbol.clone(),
+            side: msg.side.clone().into(),
             avg_price: tot_price / tot_quantity,
+            volume: tot_quantity,
             order: Order {
-                volume: 
-            
-            }
+                volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
+                exchange: String::from("binance"),
+                expire: None,
+                side: msg.side.into(),
+                symbol: msg.symbol,
+                reference: msg.order_id.parse::<i32>().expect("in msg.order_id"),
+                o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
+            },
         }
+    }
+}
+impl std::convert::From<LiveAccountUpdate> for SpotWallet {
+    fn from(msg: LiveAccountUpdate) -> Self {
+        Self {
+            assets: msg
+                .balances
+                .iter()
+                .map(|balance| (balance.symbol, balance.free.parse::<f64>().expect("in balance.free")))
+                .collect::<HashMap<_, _>>(),
+        }
+    }
+}
+fn to_type(msg_o_type: &str, o_price: f64) -> orders::Type {
+    match msg_o_type {
+        "LIMIT" => orders::Type::Limit(o_price),
+        "MARKET" => orders::Type::Market,
+        _ => panic!("unknown type"),
     }
 }

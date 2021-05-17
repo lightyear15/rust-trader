@@ -1,27 +1,33 @@
-use crate::wallets::SpotPairWallet;
 use crate::candles::Candle;
 use crate::orders::{Order, Transaction};
-use crate::strategies::{SpotSinglePairStrategy, Action};
+use crate::strategies::{Action, SpotSinglePairStrategy};
+use crate::symbol::Symbol;
+use crate::wallets::SpotWallet;
 
 #[derive(Clone)]
 pub struct Sample {
     index: u32,
     exchange: String,
-    sym: String,
+    sym: Symbol,
     time_frame: chrono::Duration,
 }
 
 impl Sample {
-    pub fn new(exchange :String, sym:String, time_frame:chrono::Duration) -> Self {
-        Self{exchange, sym, time_frame, index: 0}
+    pub fn new(exchange: String, sym: Symbol, time_frame: chrono::Duration) -> Self {
+        Self {
+            exchange,
+            sym,
+            time_frame,
+            index: 0,
+        }
     }
 }
 
 impl SpotSinglePairStrategy for Sample {
     fn name(&self) -> String {
-        format!("Sample-{}-{}-{}",self.exchange, self.sym, self.time_frame.to_string())
+        format!("Sample-{}-{}-{}", self.exchange, self.sym.to_string(), self.time_frame.to_string())
     }
-    fn on_new_candle(&mut self, _wallet :&SpotPairWallet, _outstanding_orders: &[Order], history : &[Candle]) -> Action{
+    fn on_new_candle(&mut self, _wallet: &SpotWallet, _outstanding_orders: &[Order], history: &[Candle]) -> Action {
         println!("at iteration {}", self.index);
         for c in history {
             println!("{:?}", c);
@@ -29,7 +35,7 @@ impl SpotSinglePairStrategy for Sample {
         self.index += 1;
         Action::None
     }
-    fn on_new_transaction(&mut self, _wallet :&SpotPairWallet, _outstanding_orders: &[Order], _tx: &Transaction) -> Action{
+    fn on_new_transaction(&mut self, _wallet: &SpotWallet, _outstanding_orders: &[Order], _tx: &Transaction) -> Action {
         Action::None
     }
 
@@ -41,7 +47,7 @@ impl SpotSinglePairStrategy for Sample {
         &self.exchange
     }
     fn symbol(&self) -> &str {
-        &self.sym
+        &self.sym.symbol
     }
     fn time_frame(&self) -> &chrono::Duration {
         &self.time_frame

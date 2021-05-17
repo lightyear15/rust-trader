@@ -1,14 +1,14 @@
 use crate::configuration::ExchangeSettings;
 use crate::error::Error;
 use crate::symbol::Symbol;
-use crate::{binance, candles, orders};
+use crate::{binance, candles, orders, wallets};
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use std::vec::Vec;
 
 #[async_trait(?Send)]
 pub trait RestApi {
-    async fn get_candles(&self, sym: &str, start: &NaiveDateTime) -> Vec<candles::Candle>;
+    async fn get_candles(&self, sym: &str, interval: Option<&Duration>, start: Option<&NaiveDateTime>) -> Vec<candles::Candle>;
     async fn get_symbol_info(&self, sym: &str) -> Result<Symbol, Error>;
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String;
 }
@@ -27,6 +27,7 @@ pub enum LiveEvent {
     Generic(String),
     Transaction(orders::Transaction),
     Candle(String, candles::Candle),
+    Balance(wallets::SpotWallet)
 }
 
 #[derive(Clone)]
@@ -53,7 +54,7 @@ pub async fn create_live_drivers(
             let listen_key = rest.refresh_ws_token(None).await;
             let live = Box::new(binance::Live::new(ticks, &listen_key).await);
             Ok((rest, live))
-        },
+        }
         _ => Err(Error::ErrNotFound(format!("can't find driver {}", exchange))),
     }
 }

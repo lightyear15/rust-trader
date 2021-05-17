@@ -19,7 +19,7 @@ pub async fn backtest(
     let mut tstamp = start_time + (*(strategy.time_frame()) * (depth as i32));
 
     // preparing the environment
-    let mut wallet = wallets::SpotPairWallet { base: 0.0, quote: 10000.0 };
+    let mut wallet = wallets::SpotWallet { base: 0.0, quote: 10000.0 };
     let mut outstanding_orders: Vec<Order> = Vec::new();
     let mut transactions: Vec<Transaction> = Vec::new();
 
@@ -159,13 +159,13 @@ async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> 
     }
 }
 
-fn update_wallet(tx: &Transaction, wallet: &wallets::SpotPairWallet) -> wallets::SpotPairWallet {
+fn update_wallet(tx: &Transaction, wallet: &wallets::SpotWallet) -> wallets::SpotWallet {
     match tx.side {
-        Side::Buy => wallets::SpotPairWallet {
+        Side::Buy => wallets::SpotWallet {
             base: wallet.base + tx.volume,
             quote: wallet.quote - (tx.avg_price * tx.volume),
         },
-        Side::Sell => wallets::SpotPairWallet {
+        Side::Sell => wallets::SpotWallet {
             base: wallet.base - tx.volume,
             quote: wallet.quote + (tx.avg_price * tx.volume),
         },

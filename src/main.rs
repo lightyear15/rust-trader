@@ -108,7 +108,7 @@ async fn import(
     let mut tstamp = start.and_hms(0, 0, 0);
     let end_t = end.and_hms(0, 0, 0);
     while tstamp < end_t {
-        let candles = driver.get_candles(sym, &tstamp).await;
+        let candles = driver.get_candles(sym, None, Some(&tstamp)).await;
         if candles.is_empty() {
             panic!("not getting any candles");
         }
