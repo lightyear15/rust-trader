@@ -72,7 +72,10 @@ async fn main() {
                 .find(|settings| settings.name == strategy && settings.exchange == exchange && settings.symbol == symbol)
                 .expect("no such strategy configuration");
 
-            let strategy = strategies::create(&strategy, exchange, symbol, cfg.time_frame).expect("strategies::create");
+            let exc_sett = settings.exchanges.get(&exchange).expect("can't find the exchange in config");
+            let drv = drivers::create_rest_client(&exchange, exc_sett).await.expect("no exchange driver");
+            let sym_info =drv.get_symbol_info(&symbol).await.expect("no symbol info");
+            let strategy = strategies::create(&strategy, exchange, sym_info, cfg.time_frame).expect("strategies::create");
             let res = backtest(storage, strategy, start, end).await.expect("backtest epic fail");
             println!("Backtest {:?}", res);
         }
@@ -86,8 +89,9 @@ async fn main() {
                 let (rest, live) = drivers::create_live_drivers(&strat.exchange, exc_sett, tick.as_slice())
                     .await
                     .expect("could not create exchange drivers");
+                let sym_info =rest.get_symbol_info(&strat.symbol).await.expect("no symbol info");
                 let strategy =
-                    strategies::create(&strat.name, strat.exchange, strat.symbol, strat.time_frame).expect("strategies::create");
+                    strategies::create(&strat.name, strat.exchange, sym_info, strat.time_frame).expect("strategies::create");
                 live::run_live(rest, live, strategy).await;
             }
         }
@@ -108,7 +112,7 @@ async fn import(
     let mut tstamp = start.and_hms(0, 0, 0);
     let end_t = end.and_hms(0, 0, 0);
     while tstamp < end_t {
-        let candles = driver.get_candles(sym, None, Some(&tstamp)).await;
+        let candles = driver.get_candles(sym, None, Some(&tstamp), None).await;
         if candles.is_empty() {
             panic!("not getting any candles");
         }

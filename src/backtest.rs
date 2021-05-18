@@ -1,10 +1,14 @@
 use crate::candles::Candle;
 use crate::error::Error;
 use crate::orders::{Order, Side, Transaction, Type};
-use crate::strategies::{Action, Statistics};
-use crate::{storage, utils, wallets};
 use crate::strategies::SpotSinglePairStrategy;
+use crate::strategies::{Action, Statistics};
+use crate::symbol::Symbol;
+use crate::{storage, utils, wallets};
 use chrono::{Duration, NaiveDate};
+use std::collections::HashMap;
+
+const STARTING_BALANCE: f64 = 10000.0;
 
 pub async fn backtest(
     storage: storage::Candles,
@@ -19,19 +23,21 @@ pub async fn backtest(
     let mut tstamp = start_time + (*(strategy.time_frame()) * (depth as i32));
 
     // preparing the environment
-    let mut wallet = wallets::SpotWallet { base: 0.0, quote: 10000.0 };
+    let mut wallet = wallets::SpotWallet { assets: HashMap::new() };
+    wallet.assets.insert(strategy.symbol().quote.clone(), STARTING_BALANCE);
+    wallet.assets.insert(strategy.symbol().base.clone(), 0.0);
     let mut outstanding_orders: Vec<Order> = Vec::new();
     let mut transactions: Vec<Transaction> = Vec::new();
 
     // performance tracking
-    let mut stats = Statistics::new(wallet.quote);
+    let mut stats = Statistics::new(STARTING_BALANCE);
 
     while tstamp < end_t {
         // gather current candles
         let mut cnds = storage
             .get(
                 strategy.exchange(),
-                strategy.symbol(),
+                &strategy.symbol().symbol,
                 &start_time,
                 &end_t,
                 strategy.time_frame(),
@@ -71,7 +77,7 @@ pub async fn backtest(
                 if let Some(tp_sl_or) = order_from_tp_sl_tx(&tx) {
                     outstanding_orders.push(tp_sl_or);
                 }
-                wallet = update_wallet(&tx, &wallet);
+                update_wallet(&tx, strategy.symbol(), &mut wallet);
                 outstanding_orders.retain(|or| or.reference != tx.order.reference);
                 stats.update_with_transaction(&tx);
 
@@ -93,7 +99,10 @@ pub async fn backtest(
         }
 
         // processing new candle signal
-        stats.update_with_last_price(&wallet, last.close);
+        let mut price_update: HashMap<String, f64> = HashMap::new();
+        price_update.insert(strategy.symbol().base.clone(), last.close);
+        price_update.insert(strategy.symbol().quote.clone(), 1.0);
+        stats.update_with_last_prices(&wallet, &price_update);
         let action = strategy
             .as_mut()
             .on_new_candle(&wallet, outstanding_orders.as_slice(), cnds.as_slice());
@@ -159,17 +168,18 @@ async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> 
     }
 }
 
-fn update_wallet(tx: &Transaction, wallet: &wallets::SpotWallet) -> wallets::SpotWallet {
+fn update_wallet(tx: &Transaction, sym : &Symbol, wallet: &mut wallets::SpotWallet) {
+    assert_eq!(tx.symbol, sym.symbol);
     match tx.side {
-        Side::Buy => wallets::SpotWallet {
-            base: wallet.base + tx.volume,
-            quote: wallet.quote - (tx.avg_price * tx.volume),
+        Side::Buy => {
+            *wallet.assets.get_mut(&sym.quote).expect("no quote in wallet") -= tx.avg_price * tx.volume;
+            *wallet.assets.get_mut(&sym.base).expect("no base in wallet") += tx.volume;
         },
-        Side::Sell => wallets::SpotWallet {
-            base: wallet.base - tx.volume,
-            quote: wallet.quote + (tx.avg_price * tx.volume),
+        Side::Sell => {
+            *wallet.assets.get_mut(&sym.quote).expect("no quote in wallet") += tx.avg_price * tx.volume;
+            *wallet.assets.get_mut(&sym.base).expect("no base in wallet") -= tx.volume;
         },
-    }
+    };
 }
 
 fn order_from_tp_sl_tx(_tx: &Transaction) -> Option<Order> {

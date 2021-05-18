@@ -31,7 +31,7 @@ impl SpotSinglePairStrategy for BuyDips {
         if current_price < avg {
             let order = Order {
                 exchange: self.exchange.clone(),
-                symbol: self.sym.symbol,
+                symbol: self.sym.symbol.clone(),
                 side: Side::Buy,
                 o_type: Type::Market,
                 volume: wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * 0.05 / current_price,
@@ -65,8 +65,8 @@ impl SpotSinglePairStrategy for BuyDips {
     fn exchange(&self) -> &str {
         &self.exchange
     }
-    fn symbol(&self) -> &str {
-        &self.sym.symbol
+    fn symbol(&self) -> &Symbol {
+        &self.sym
     }
     fn time_frame(&self) -> &chrono::Duration {
         &self.time_frame

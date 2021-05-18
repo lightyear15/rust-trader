@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::orders::{Order, Side, Transaction, Type};
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
+use std::collections::HashMap;
 
 pub mod buy_dips;
 pub mod sample;
@@ -24,7 +25,7 @@ pub trait SpotSinglePairStrategy {
 
     fn get_candles_history_size(&self) -> usize;
     fn exchange(&self) -> &str;
-    fn symbol(&self) -> &str;
+    fn symbol(&self) -> &Symbol;
     fn time_frame(&self) -> &chrono::Duration;
 
     fn new_order(&self, refer: Option<i32>) -> Order {
@@ -35,7 +36,7 @@ pub trait SpotSinglePairStrategy {
 
             expire: None,
             exchange: String::from(self.exchange()),
-            symbol: String::from(self.symbol()),
+            symbol: self.symbol().symbol.clone(),
             reference: refer.unwrap_or_else(rand::random::<i32>),
         }
     }
@@ -77,8 +78,10 @@ impl Statistics {
             highest_balance: balance_start,
         }
     }
-    pub fn update_with_last_prices(&mut self, wallet: &SpotWallet, sym: &str, pr: f64) {
-        let balance = wallet.quote + wallet.base * pr;
+    pub fn update_with_last_prices(&mut self, wallet: &SpotWallet, prices: &HashMap<String, f64>) {
+        let balance = prices.iter().fold(0.0, |balance, (sym, price)| {
+            balance + wallet.assets.get(sym).unwrap_or(&0.0) * price
+        });
         self.balance = balance;
         if balance < self.lowest_balance {
             self.lowest_balance = balance;

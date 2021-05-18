@@ -46,8 +46,8 @@ impl SpotSinglePairStrategy for Sample {
     fn exchange(&self) -> &str {
         &self.exchange
     }
-    fn symbol(&self) -> &str {
-        &self.sym.symbol
+    fn symbol(&self) -> &Symbol {
+        &self.sym
     }
     fn time_frame(&self) -> &chrono::Duration {
         &self.time_frame

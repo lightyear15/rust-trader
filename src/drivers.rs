@@ -8,7 +8,13 @@ use std::vec::Vec;
 
 #[async_trait(?Send)]
 pub trait RestApi {
-    async fn get_candles(&self, sym: &str, interval: Option<&Duration>, start: Option<&NaiveDateTime>) -> Vec<candles::Candle>;
+    async fn get_candles(
+        &self,
+        sym: &str,
+        interval: Option<&Duration>,
+        start: Option<&NaiveDateTime>,
+        limit: Option<usize>,
+    ) -> Vec<candles::Candle>;
     async fn get_symbol_info(&self, sym: &str) -> Result<Symbol, Error>;
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String;
 }
@@ -27,7 +33,7 @@ pub enum LiveEvent {
     Generic(String),
     Transaction(orders::Transaction),
     Candle(String, candles::Candle),
-    Balance(wallets::SpotWallet)
+    Balance(wallets::SpotWallet),
 }
 
 #[derive(Clone)]

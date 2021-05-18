@@ -85,12 +85,18 @@ impl RestApi for Rest {
         x
     }
 
-    async fn get_candles(&self, sym: &str, interval: Option<&Duration>, start: Option<&NaiveDateTime>) -> Vec<candles::Candle> {
+    async fn get_candles(
+        &self,
+        sym: &str,
+        interval: Option<&Duration>,
+        start: Option<&NaiveDateTime>,
+        limit: Option<usize>,
+    ) -> Vec<candles::Candle> {
         let mut queries: Vec<(String, String)> =
             start.map_or(Vec::new(), |st| vec![(String::from("startTime"), format!("{}000", st.timestamp()))]);
         queries.push((String::from("symbol"), String::from(sym)));
         queries.push((String::from("interval"), to_interval(interval.unwrap_or(&Duration::minutes(1)))));
-        queries.push((String::from("limit"), String::from("1000")));
+        queries.push((String::from("limit"), limit.unwrap_or(1000).to_string()));
         let url = self.url.clone() + "/api/v3/klines";
         let request = self
             .client
@@ -98,17 +104,20 @@ impl RestApi for Rest {
             .set_header("X-MBX-APIKEY", self.api_key.as_str())
             .query(&queries)
             .expect("in adding queries");
-        request
-            .send()
-            .await
-            .expect("in send binance klines request")
-            .json::<Vec<Candle>>()
-            .limit(128_000_000)
-            .await
-            .expect("in json<Vec<Candle>>")
-            .drain(0..)
-            .map(|cnd| cnd.into())
-            .collect()
+        let mut response = request.send().await.expect("in send binance klines request");
+
+        //let bod = response.body().await.expect("message body");
+        //println!("{:?}", bod);
+        //Vec::new()
+
+        response
+        .json::<Vec<Candle>>()
+        .limit(128_000_000)
+        .await
+        .expect("in json<Vec<Candle>>")
+        .drain(0..)
+        .map(|cnd| cnd.into())
+        .collect()
     }
 }
 
@@ -170,6 +179,9 @@ impl LiveFeed for Live {
                                 return LiveEvent::Transaction(tx_msg.into());
                             }
                         }
+                        LiveMessageType::AccountUpdate(account_msg) => {
+                            return LiveEvent::Balance(account_msg.into());
+                        }
                     }
                 }
                 Frame::Ping(bytes) => {
@@ -217,6 +229,9 @@ struct Candle {
     close_time: u64,
     quote_asset_volume: String,
     number_of_trades: u32,
+    ignore1: String,
+    ignore2: String,
+    ignore3: String,
 }
 #[derive(Debug, serde::Deserialize, Clone)]
 struct ListenKey {
@@ -425,11 +440,11 @@ impl std::convert::From<LiveOrderUpdate> for Transaction {
     }
 }
 impl std::convert::From<LiveAccountUpdate> for SpotWallet {
-    fn from(msg: LiveAccountUpdate) -> Self {
+    fn from(mut msg: LiveAccountUpdate) -> Self {
         Self {
             assets: msg
                 .balances
-                .iter()
+                .drain(0..)
                 .map(|balance| (balance.symbol, balance.free.parse::<f64>().expect("in balance.free")))
                 .collect::<HashMap<_, _>>(),
         }
