@@ -116,7 +116,7 @@ impl RestApi for Rest {
 
     async fn get_wallet(&self) -> Result<SpotWallet, Error> {
         /*
-                 *
+        *
         +        let url = self.url.clone() + "/api/v3/userDataStream";
         +        let body = format!("timestamp={}", Utc::now().timestamp_millis());
         +        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
@@ -216,9 +216,16 @@ impl LiveFeed for Live {
                             }
                         }
                         LiveMessageType::OrderUpdate(tx_msg) => {
-                            if matches!(tx_msg.order_status, OrderStatus::Filled) {
-                                return LiveEvent::Transaction(tx_msg.into());
-                            }
+                            match tx_msg.order_status {
+                                OrderStatus::Filled => {
+                                    return LiveEvent::Transaction(tx_msg.into());
+                                }
+                                OrderStatus::New => {
+                                    let tx: orders::Transaction = tx_msg.into();
+                                    return LiveEvent::NewOrder(tx.order);
+                                }
+                                _ => {},
+                            };
                         }
                         LiveMessageType::AccountUpdate(account_msg) => {
                             return LiveEvent::Balance(account_msg.balances.into());

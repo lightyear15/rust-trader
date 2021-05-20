@@ -33,6 +33,7 @@ pub enum LiveEvent {
     None,
     Generic(String),
     Transaction(orders::Transaction),
+    NewOrder(orders::Order),
     Candle(String, candles::Candle),
     Balance(wallets::SpotWallet),
 }
