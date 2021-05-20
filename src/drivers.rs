@@ -16,6 +16,7 @@ pub trait RestApi {
         limit: Option<usize>,
     ) -> Vec<candles::Candle>;
     async fn get_symbol_info(&self, sym: &str) -> Result<Symbol, Error>;
+    async fn get_wallet(&self) -> Result<wallets::SpotWallet,Error>;
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String;
 }
 

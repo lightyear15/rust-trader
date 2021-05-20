@@ -14,7 +14,6 @@ use futures_util::stream::StreamExt;
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
-use serde_json;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -105,19 +104,61 @@ impl RestApi for Rest {
             .query(&queries)
             .expect("in adding queries");
         let mut response = request.send().await.expect("in send binance klines request");
-
-        //let bod = response.body().await.expect("message body");
-        //println!("{:?}", bod);
-        //Vec::new()
-
         response
-        .json::<Vec<Candle>>()
-        .limit(128_000_000)
-        .await
-        .expect("in json<Vec<Candle>>")
-        .drain(0..)
-        .map(|cnd| cnd.into())
-        .collect()
+            .json::<Vec<Candle>>()
+            .limit(128_000_000)
+            .await
+            .expect("in json<Vec<Candle>>")
+            .drain(0..)
+            .map(|cnd| cnd.into())
+            .collect()
+    }
+
+    async fn get_wallet(&self) -> Result<SpotWallet, Error> {
+        /*
+                 *
+        +        let url = self.url.clone() + "/api/v3/userDataStream";
+        +        let body = format!("timestamp={}", Utc::now().timestamp_millis());
+        +        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
+        +            .expect("in creating the signer")
+        +            .sign_oneshot_to_vec(body.as_bytes())
+        +            .expect("in digesting body");
+        +        let signature_str = std::str::from_utf8(signature.as_slice()).expect("in converting u8 to str");
+        */
+        let url = self.url.clone() + "/sapi/v1/accountSnapshot";
+        let tstamp = Utc::now().timestamp_millis();
+        let tstamp_str = format!("{}", tstamp);
+        let mut queries: Vec<(&str, &str)> = vec![("type", "SPOT"), ("limit", "30"), ("timestamp", &tstamp_str)];
+        //.query(&[("signature", signature_str)])
+        let mut request = self
+            .client
+            .get(url)
+            .set_header("X-MBX-APIKEY", self.api_key.as_str())
+            .query(&queries)
+            .expect("in adding queries");
+        let signature = Signer::new(MessageDigest::shake_256(), &self.secret)
+            .expect("in creating the signer")
+            .sign_oneshot_to_vec(request.get_uri().query().expect("no query?").as_bytes())
+            .expect("in digesting body")
+            .iter()
+            .map(|b| format!("{:x}", b))
+            .collect::<Vec<_>>()
+            .join("");
+        queries.push(("signature", &signature));
+        request = request.query(&queries).expect("in setting queries with signature");
+        let wl = request
+            .send()
+            .await
+            .expect("in send binance account snapshot request")
+            .json::<AccountStatus>()
+            .limit(128_000_000)
+            .await
+            .expect("in json::<AccountStatus>")
+            .snapshot
+            .data
+            .balances
+            .into();
+        Ok(wl)
     }
 }
 
@@ -180,7 +221,7 @@ impl LiveFeed for Live {
                             }
                         }
                         LiveMessageType::AccountUpdate(account_msg) => {
-                            return LiveEvent::Balance(account_msg.into());
+                            return LiveEvent::Balance(account_msg.balances.into());
                         }
                     }
                 }
@@ -238,6 +279,24 @@ struct ListenKey {
     #[serde(alias = "listenKey")]
     listen_key: String,
 }
+#[derive(Debug, serde::Deserialize)]
+struct AccountStatusData {
+    balances: Vec<Balance>,
+}
+#[derive(Debug, serde::Deserialize)]
+struct AccountStatusSnapshot {
+    data: AccountStatusData,
+    #[serde(alias = "updateTime")]
+    tstamp: u64,
+}
+#[derive(Debug, serde::Deserialize)]
+struct AccountStatus {
+    #[serde(alias = "snapshotVos")]
+    snapshot: AccountStatusSnapshot,
+    msg: String,
+    code: i16,
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct LiveCandle {
     #[serde(alias = "t")]
@@ -319,9 +378,9 @@ struct LiveOrderUpdate {
     order_type: String,
 }
 #[derive(Debug, serde::Deserialize)]
-struct LiveBalances {
+struct Balance {
     #[serde(alias = "a")]
-    symbol: String,
+    asset: String,
     #[serde(alias = "f")]
     free: String,
     #[serde(alias = "l")]
@@ -332,7 +391,7 @@ struct LiveAccountUpdate {
     #[serde(alias = "E")]
     tstamp: u64,
     #[serde(alias = "B")]
-    balances: Vec<LiveBalances>,
+    balances: Vec<Balance>,
 }
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
@@ -362,7 +421,7 @@ fn to_interval(interval: &Duration) -> String {
 }
 fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     let mut streams: Vec<_> = ticks
-        .into_iter()
+        .iter()
         .map(|tick| format!("{}@kline_{}", tick.sym.to_ascii_lowercase(), to_interval(&tick.interval)))
         .collect();
     streams.push(String::from(listen_key));
@@ -439,13 +498,12 @@ impl std::convert::From<LiveOrderUpdate> for Transaction {
         }
     }
 }
-impl std::convert::From<LiveAccountUpdate> for SpotWallet {
-    fn from(mut msg: LiveAccountUpdate) -> Self {
+impl std::convert::From<Vec<Balance>> for SpotWallet {
+    fn from(mut msg: Vec<Balance>) -> Self {
         Self {
             assets: msg
-                .balances
                 .drain(0..)
-                .map(|balance| (balance.symbol, balance.free.parse::<f64>().expect("in balance.free")))
+                .map(|balance| (balance.asset, balance.free.parse::<f64>().expect("in balance.free")))
                 .collect::<HashMap<_, _>>(),
         }
     }
