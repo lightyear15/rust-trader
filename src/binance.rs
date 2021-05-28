@@ -25,8 +25,8 @@ pub struct Rest {
 }
 
 impl Rest {
-    pub fn new(api_key: &str, secret: &str) -> Rest {
-        let secret = PKey::hmac(secret.as_bytes()).expect("cannot create private key from secret");
+    pub fn new(api_key: &str, secret_word: &str) -> Rest {
+        let secret = PKey::hmac(secret_word.as_bytes()).expect("cannot create private key from secret");
         let client = Client::builder()
             .header("User-Agent", "trader/0.0.1")
             .header("Host", "api.binance.com")
@@ -34,6 +34,7 @@ impl Rest {
             .finish();
         Rest {
             url: String::from("https://api.binance.com"),
+            //url: String::from("http://localhost:8080"),
             client,
             api_key: String::from(api_key),
             secret,
@@ -100,7 +101,7 @@ impl RestApi for Rest {
         let request = self
             .client
             .get(url)
-            .set_header("X-MBX-APIKEY", self.api_key.as_str())
+            //.set_header("X-MBX-APIKEY", self.api_key.as_str())
             .query(&queries)
             .expect("in adding queries");
         let mut response = request.send().await.expect("in send binance klines request");
@@ -115,50 +116,40 @@ impl RestApi for Rest {
     }
 
     async fn get_wallet(&self) -> Result<SpotWallet, Error> {
-        /*
-        *
-        +        let url = self.url.clone() + "/api/v3/userDataStream";
-        +        let body = format!("timestamp={}", Utc::now().timestamp_millis());
-        +        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
-        +            .expect("in creating the signer")
-        +            .sign_oneshot_to_vec(body.as_bytes())
-        +            .expect("in digesting body");
-        +        let signature_str = std::str::from_utf8(signature.as_slice()).expect("in converting u8 to str");
-        */
         let url = self.url.clone() + "/sapi/v1/accountSnapshot";
-        let tstamp = Utc::now().timestamp_millis();
-        let tstamp_str = format!("{}", tstamp);
-        let mut queries: Vec<(&str, &str)> = vec![("type", "SPOT"), ("limit", "30"), ("timestamp", &tstamp_str)];
-        //.query(&[("signature", signature_str)])
-        let mut request = self
-            .client
-            .get(url)
-            .set_header("X-MBX-APIKEY", self.api_key.as_str())
-            .query(&queries)
-            .expect("in adding queries");
-        let signature = Signer::new(MessageDigest::shake_256(), &self.secret)
+        let tstamp_str = format!("{}", Utc::now().timestamp_millis());
+        let mut queries: Vec<(&str, &str)> = vec![("type", "SPOT"), ("timestamp", &tstamp_str)];
+        let mut request = self.client.get(url).query(&queries).expect("in adding queries");
+        let query_str = request.get_uri().query().expect("no query?");
+        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
             .expect("in creating the signer")
-            .sign_oneshot_to_vec(request.get_uri().query().expect("no query?").as_bytes())
+            .sign_oneshot_to_vec(query_str.as_bytes())
             .expect("in digesting body")
             .iter()
-            .map(|b| format!("{:x}", b))
+            .map(|b| format!("{:02x}", b))
             .collect::<Vec<_>>()
             .join("");
         queries.push(("signature", &signature));
         request = request.query(&queries).expect("in setting queries with signature");
-        let wl = request
+        let mut wl = request
             .send()
             .await
             .expect("in send binance account snapshot request")
+            //.body().await.unwrap()
+            //;
+            //let rsp = serde_json::from_slice::<AccountStatus>(&wl).unwrap();
+            //println!("rsp {:?}", rsp);
             .json::<AccountStatus>()
             .limit(128_000_000)
             .await
             .expect("in json::<AccountStatus>")
             .snapshot
-            .data
-            .balances
-            .into();
-        Ok(wl)
+            //.data
+            //.balances
+            //.into();
+            ;
+        wl.sort_by_key(|shot| shot.tstamp);
+       Ok( wl.remove(wl.len() -1).data.balances.into())
     }
 }
 
@@ -208,28 +199,9 @@ impl LiveFeed for Live {
             match msg {
                 Frame::Text(text) => {
                     let mesg = serde_json::from_slice::<LiveMessage>(&text).expect("message not implemented");
-                    match mesg.data {
-                        LiveMessageType::LiveCandle(candle_msg) => {
-                            if candle_msg.candle.kline_close {
-                                let symbol_name = candle_msg.symbol.clone();
-                                return LiveEvent::Candle(symbol_name, candle_msg.into());
-                            }
-                        }
-                        LiveMessageType::OrderUpdate(tx_msg) => {
-                            match tx_msg.order_status {
-                                OrderStatus::Filled => {
-                                    return LiveEvent::Transaction(tx_msg.into());
-                                }
-                                OrderStatus::New => {
-                                    let tx: orders::Transaction = tx_msg.into();
-                                    return LiveEvent::NewOrder(tx.order);
-                                }
-                                _ => {},
-                            };
-                        }
-                        LiveMessageType::AccountUpdate(account_msg) => {
-                            return LiveEvent::Balance(account_msg.balances.into());
-                        }
+                    let m_event = interpret_message(mesg);
+                    if let Some(event) = m_event {
+                        return event;
                     }
                 }
                 Frame::Ping(bytes) => {
@@ -243,9 +215,6 @@ impl LiveFeed for Live {
             };
         }
     }
-
-    async fn submit(&self, _order: &Order) {}
-    async fn cancel(&self, _order_reference: i32) {}
 }
 
 //---------------------------------
@@ -289,6 +258,8 @@ struct ListenKey {
 #[derive(Debug, serde::Deserialize)]
 struct AccountStatusData {
     balances: Vec<Balance>,
+    #[serde(alias = "totalAssetOfBtc")]
+    total: String,
 }
 #[derive(Debug, serde::Deserialize)]
 struct AccountStatusSnapshot {
@@ -299,7 +270,7 @@ struct AccountStatusSnapshot {
 #[derive(Debug, serde::Deserialize)]
 struct AccountStatus {
     #[serde(alias = "snapshotVos")]
-    snapshot: AccountStatusSnapshot,
+    snapshot: Vec<AccountStatusSnapshot>,
     msg: String,
     code: i16,
 }
@@ -521,4 +492,31 @@ fn to_type(msg_o_type: &str, o_price: f64) -> orders::Type {
         "MARKET" => orders::Type::Market,
         _ => panic!("unknown type"),
     }
+}
+
+fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
+    match mesg.data {
+        LiveMessageType::LiveCandle(candle_msg) => {
+            if candle_msg.candle.kline_close {
+                let symbol_name = candle_msg.symbol.clone();
+                return Some(LiveEvent::Candle(symbol_name, candle_msg.into()));
+            }
+        }
+        LiveMessageType::OrderUpdate(tx_msg) => {
+            match tx_msg.order_status {
+                OrderStatus::Filled => {
+                    return Some(LiveEvent::Transaction(tx_msg.into()));
+                }
+                OrderStatus::New => {
+                    let tx: orders::Transaction = tx_msg.into();
+                    return Some(LiveEvent::NewOrder(tx.order));
+                }
+                _ => {}
+            };
+        }
+        LiveMessageType::AccountUpdate(account_msg) => {
+            return Some(LiveEvent::Balance(account_msg.balances.into()));
+        }
+    }
+    None
 }

@@ -47,8 +47,6 @@ pub struct Tick {
 #[async_trait(?Send)]
 pub trait LiveFeed {
     async fn next(&mut self) -> LiveEvent;
-    async fn submit(&self, order: &orders::Order);
-    async fn cancel(&self, order_reference: i32);
 }
 
 pub async fn create_live_drivers(
