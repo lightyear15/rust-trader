@@ -1,10 +1,11 @@
 use serde::Deserialize;
 use std::fmt;
+use chrono::{NaiveDateTime, Duration};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Candle {
-    pub tstamp: chrono::NaiveDateTime, // refers to start timestamp
-    pub tframe: chrono::Duration,
+    pub tstamp: NaiveDateTime, // refers to start timestamp
+    pub tframe: Duration,
 
     pub open: f64,
     pub close: f64,
@@ -16,6 +17,12 @@ pub struct Candle {
 impl fmt::Display for Candle {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         return write!(f, "[{} [{} -> {}]", self.tstamp, self.open, self.close);
+    }
+}
+
+impl Candle {
+    pub fn get_time_interval(&self) -> (NaiveDateTime, NaiveDateTime) {
+        (self.tstamp.clone(), self.tstamp + self.tframe)
     }
 }
 

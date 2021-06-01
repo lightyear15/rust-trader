@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 const STARTING_BALANCE: f64 = 10000.0;
 
-pub async fn backtest(
+pub async fn backtest_spot_singlepair(
     storage: storage::Candles,
     mut strategy: Box<dyn SpotSinglePairStrategy>,
     start: NaiveDate,
@@ -48,7 +48,7 @@ pub async fn backtest(
             break;
         }
         cnds.reverse();
-        let last = cnds.last().expect("len == 0 ??, impossible!!");
+        let last = cnds.last().unwrap();
 
         // check outstanding orders with current candle
         // any expired orders?
@@ -61,19 +61,22 @@ pub async fn backtest(
                 i += 1;
             }
         }
-        // find first order that can be fullfilled
         loop {
-            let mut frst_tx: Option<Transaction> = None;
+            let mut next_tx: Option<Transaction> = None;
+            // find first order that can be fullfilled
             for or in &outstanding_orders {
-                if order_in_candle(or, last) {
-                    let pot_tx = process_order(&or, last, &storage).await.expect("process_order");
-                    let frst_tstamp = frst_tx.as_ref().map(|t| t.tstamp).unwrap_or(chrono::naive::MAX_DATETIME);
-                    if frst_tstamp > pot_tx.tstamp {
-                        frst_tx = Some(pot_tx);
-                    }
+                let tx = if order_in_candle(or, last) {
+                    // order price limit is within the current candle (or order is MARKET)
+                    generate_tx_from_order(&or, last, &storage).await.expect("process_order")
+                } else {
+                    Transaction::default()
+                };
+                let frst_tstamp = next_tx.as_ref().map(|t| t.tstamp).unwrap_or(chrono::naive::MAX_DATETIME);
+                if frst_tstamp > tx.tstamp {
+                    next_tx = Some(tx);
                 }
             }
-            if let Some(tx) = frst_tx {
+            if let Some(tx) = next_tx {
                 if let Some(tp_sl_or) = order_from_tp_sl_tx(&tx) {
                     outstanding_orders.push(tp_sl_or);
                 }
@@ -81,7 +84,7 @@ pub async fn backtest(
                 outstanding_orders.retain(|or| or.reference != tx.order.reference);
                 stats.update_with_transaction(&tx);
 
-                let action = strategy.on_new_transaction(&wallet, outstanding_orders.as_slice(), &tx);
+                let action = strategy.on_new_transaction(outstanding_orders.as_slice(), &tx);
                 transactions.push(tx);
                 match action {
                     Action::NewOrder(or) => {
@@ -103,9 +106,7 @@ pub async fn backtest(
         price_update.insert(strategy.symbol().base.clone(), last.close);
         price_update.insert(strategy.symbol().quote.clone(), 1.0);
         stats.update_with_last_prices(&wallet, &price_update);
-        let action = strategy
-            .as_mut()
-            .on_new_candle(&wallet, outstanding_orders.as_slice(), cnds.as_slice());
+        let action = strategy.on_new_candle(&wallet, outstanding_orders.as_slice(), cnds.as_slice());
         match action {
             Action::NewOrder(or) => {
                 stats.update_with_order(&or);
@@ -135,7 +136,7 @@ fn is_expired(ord: &Order, last: &Candle) -> bool {
     ord.expire.map_or(false, |date| last.tstamp > date)
 }
 
-async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> Result<Transaction, Error> {
+async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Candles) -> Result<Transaction, Error> {
     let mut tx = Transaction {
         symbol: ord.symbol.clone(),
         side: ord.side.clone(),
@@ -168,17 +169,17 @@ async fn process_order(ord: &Order, last: &Candle, store: &storage::Candles) -> 
     }
 }
 
-fn update_wallet(tx: &Transaction, sym : &Symbol, wallet: &mut wallets::SpotWallet) {
+fn update_wallet(tx: &Transaction, sym: &Symbol, wallet: &mut wallets::SpotWallet) {
     assert_eq!(tx.symbol, sym.symbol);
     match tx.side {
         Side::Buy => {
             *wallet.assets.get_mut(&sym.quote).expect("no quote in wallet") -= tx.avg_price * tx.volume;
             *wallet.assets.get_mut(&sym.base).expect("no base in wallet") += tx.volume;
-        },
+        }
         Side::Sell => {
             *wallet.assets.get_mut(&sym.quote).expect("no quote in wallet") += tx.avg_price * tx.volume;
             *wallet.assets.get_mut(&sym.base).expect("no base in wallet") -= tx.volume;
-        },
+        }
     };
 }
 

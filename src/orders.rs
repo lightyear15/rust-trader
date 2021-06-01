@@ -73,7 +73,7 @@ impl Default for Transaction {
             side: Side::Buy,
             avg_price: 0.0,
             volume: 0.0,
-            tstamp: chrono::naive::MAX_DATETIME, // never in the future
+            tstamp: chrono::naive::MAX_DATETIME, // the transaction that never happened it's in the future
             order: Order::default(),
         }
     }

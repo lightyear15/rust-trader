@@ -35,7 +35,7 @@ impl SpotSinglePairStrategy for Sample {
         self.index += 1;
         Action::None
     }
-    fn on_new_transaction(&mut self, _wallet: &SpotWallet, _outstanding_orders: &[Order], _tx: &Transaction) -> Action {
+    fn on_new_transaction(&mut self, _outstanding_orders: &[Order], _tx: &Transaction) -> Action {
         Action::None
     }
 

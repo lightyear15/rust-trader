@@ -1,13 +1,15 @@
-use crate::candles::Candle;
 use crate::drivers::{LiveEvent, LiveFeed, RestApi};
 use crate::orders::Order;
-use crate::strategies::SpotSinglePairStrategy;
-use crate::wallets::SpotWallet;
+use crate::strategies::{SpotSinglePairStrategy, Action};
 use std::collections::VecDeque;
 
-pub async fn run_live(rest: Box<dyn RestApi>, mut feed: Box<dyn LiveFeed>, mut strategy: Box<dyn SpotSinglePairStrategy>) {
+pub async fn run_live(mut strategy: Box<dyn SpotSinglePairStrategy>, rest: Box<dyn RestApi>, mut feed: Box<dyn LiveFeed>) {
     println!("starting strategy {}", strategy.name());
+    println!("on symbol {:?}", strategy.symbol());
     let hist_size = strategy.get_candles_history_size();
+    rest
+        .get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
+        .await;
     let mut cnds = rest
         .get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
         .await;
@@ -20,27 +22,45 @@ pub async fn run_live(rest: Box<dyn RestApi>, mut feed: Box<dyn LiveFeed>, mut s
 
     loop {
         let msg = feed.next().await;
-        match msg {
+        let action = match msg {
             LiveEvent::Candle(sym, candle) => {
                 buffer.pop_front();
                 buffer.push_back(candle);
-                let _action = strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous());
                 println!("{} - {:?}", sym, buffer);
+                strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous())
             }
             LiveEvent::ReconnectionRequired => {
-                println!("ReconnectionRequired")
+                println!("ReconnectionRequired");
+                return;
             }
             LiveEvent::Transaction(tx) => {
                 orders.retain(|ord| ord.reference != tx.order.reference);
-                let _action = strategy.on_new_transaction(&wallet, orders.as_slice(), &tx);
+                strategy.on_new_transaction(orders.as_slice(), &tx)
             }
             LiveEvent::NewOrder(order) => {
                 orders.push(order);
+                Action::None
             }
             LiveEvent::Balance(spot_wallet) => {
                 wallet = spot_wallet;
+                Action::None
             }
-            _ => {}
+            _ => {
+                println!("unkown event");
+                Action::None
+            }
+        };
+
+        match action {
+            Action::NewOrder(order) => {
+                println!("received a new order action {:?}", order);
+            }
+            Action::CancelOrder(reference) => {
+                println!("received a cancel order action {:?}", reference);
+            }
+            Action::None => {
+                println!("action of doing nothing");
+            }
         }
     }
 }

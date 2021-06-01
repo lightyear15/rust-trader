@@ -42,7 +42,7 @@ impl SpotSinglePairStrategy for BuyDips {
         }
         Action::None
     }
-    fn on_new_transaction(&mut self, _wallet :&SpotWallet, _outstanding_orders: &[Order], tx: &Transaction) -> Action{
+    fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action{
         if tx.side == Side::Sell {
             return Action::None;
         }

@@ -21,7 +21,7 @@ pub enum Action {
 pub trait SpotSinglePairStrategy {
     fn name(&self) -> String;
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action;
-    fn on_new_transaction(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], tx: &Transaction) -> Action;
+    fn on_new_transaction(&mut self, outstanding_orders: &[Order], tx: &Transaction) -> Action;
 
     fn get_candles_history_size(&self) -> usize;
     fn exchange(&self) -> &str;

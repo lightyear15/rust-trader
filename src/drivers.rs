@@ -20,7 +20,7 @@ pub trait RestApi {
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String;
 }
 
-pub async fn create_rest_client(exchange: &str, config: &ExchangeSettings) -> Result<Box<dyn RestApi>, Error> {
+pub fn create_rest_client(exchange: &str, config: &ExchangeSettings) -> Result<Box<dyn RestApi>, Error> {
     match exchange {
         "binance" => Ok(Box::new(binance::Rest::new(&config.api_key, &config.secret_key))),
         _ => Err(Error::ErrNotFound(format!("can't find driver {}", exchange))),
@@ -49,17 +49,11 @@ pub trait LiveFeed {
     async fn next(&mut self) -> LiveEvent;
 }
 
-pub async fn create_live_drivers(
-    exchange: &str,
-    config: &ExchangeSettings,
-    ticks: &[Tick],
-) -> Result<(Box<dyn RestApi>, Box<dyn LiveFeed>), Error> {
+pub async fn create_live_driver(exchange :&str, listen_key: &str, ticks: &[Tick]) -> Result<Box<dyn LiveFeed>, Error> {
     match exchange {
         "binance" => {
-            let rest = Box::new(binance::Rest::new(&config.api_key, &config.secret_key));
-            let listen_key = rest.refresh_ws_token(None).await;
             let live = Box::new(binance::Live::new(ticks, &listen_key).await);
-            Ok((rest, live))
+            Ok(live)
         }
         _ => Err(Error::ErrNotFound(format!("can't find driver {}", exchange))),
     }
