@@ -46,6 +46,7 @@ enum Trade {
 
 #[actix_web::main]
 async fn main() {
+    openssl_probe::init_ssl_cert_env_vars();
     let settings = Settings::get_configuration("trader.toml").expect("Failed at reading configuration");
     let opt = Trade::from_args();
     match opt {
