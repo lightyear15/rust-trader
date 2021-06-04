@@ -18,8 +18,6 @@ pub async fn run_live(mut strategy: Box<dyn SpotSinglePairStrategy>, rest: Box<d
     let mut wallet = rest.get_wallet().await.expect("in asking for initial wallet");
     let mut orders: Vec<Order> = Vec::new();
 
-    println!("starting wallet {:?}", wallet);
-
     loop {
         let msg = feed.next().await;
         let action = match msg {

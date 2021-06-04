@@ -2,7 +2,7 @@ use crate::candles;
 use crate::drivers::{LiveEvent, LiveFeed, RestApi, Tick};
 use crate::error::Error;
 use crate::orders;
-use crate::orders::{Order, Transaction};
+use crate::orders::Transaction;
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
 use async_trait::async_trait;
@@ -135,21 +135,39 @@ impl RestApi for Rest {
             .send()
             .await
             .expect("in send binance account snapshot request")
-            //.body().await.unwrap()
-            //;
-            //let rsp = serde_json::from_slice::<AccountStatus>(&wl).unwrap();
-            //println!("rsp {:?}", rsp);
             .json::<AccountStatus>()
             .limit(128_000_000)
             .await
             .expect("in json::<AccountStatus>")
-            .snapshot
-            //.data
-            //.balances
-            //.into();
-            ;
+            .snapshot;
         wl.sort_by_key(|shot| shot.tstamp);
-       Ok( wl.remove(wl.len() -1).data.balances.into())
+        Ok(wl.remove(wl.len() - 1).data.balances.into())
+    }
+    async fn send_order(&self, order: orders::Order) -> orders::OrderStatus {
+        let url = self.url.clone() + "/api/v3/order";
+        let order_request: NewOrder = order.into();
+        let body = serde_json::to_string(&order_request).expect("in send_order to_string");
+        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
+            .expect("in creating the signer")
+            .sign_oneshot_to_vec(body.as_bytes())
+            .expect("in digesting body")
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<Vec<_>>()
+            .join("");
+        let request = self
+            .client
+            .post(url)
+            .query(&[("signature", signature.as_str()),
+            ("newOrderResponseType", "ACK")])
+            .expect("in send_order adding signature")
+            .send_json(&body);
+        let resp_code = request.await.expect("in receiving server response").status();
+        if resp_code.is_success() {
+        orders::OrderStatus::Accepted
+        } else {
+            orders::OrderStatus::Rejected
+        }
     }
 }
 
@@ -166,8 +184,6 @@ impl Live {
         let base_url = String::from("wss://stream.binance.com:9443/stream?streams=");
         let stream_list = build_stream_list(ticks, listen_key);
         let url = base_url.clone() + &stream_list;
-        println!("{:?} - {:?} - {:?}", base_url, stream_list, url);
-
         let (resp, conn) = Client::builder()
             .max_http_version(awc::http::Version::HTTP_11)
             .finish()
@@ -175,9 +191,7 @@ impl Live {
             .connect()
             .await
             .expect("on ws connecting to binance");
-
         println!("new response {:?}", resp);
-
         Self {
             ticks: ticks.to_vec(),
             url: base_url,
@@ -198,7 +212,8 @@ impl LiveFeed for Live {
             let msg = nnext.unwrap().expect("in next message");
             match msg {
                 Frame::Text(text) => {
-                    let mesg = serde_json::from_slice::<LiveMessage>(&text).expect("message not implemented");
+                    let panic_msg = format!("original text {:?}", text);
+                    let mesg = serde_json::from_slice::<LiveMessage>(&text).expect(&panic_msg);
                     let m_event = interpret_message(mesg);
                     if let Some(event) = m_event {
                         return event;
@@ -237,18 +252,26 @@ struct ExchangeInfo {
 }
 #[derive(Debug, serde::Deserialize)]
 struct Candle {
-    open_time: u64,
+    #[serde(alias = "t")]
+    tstamp_open: u64,
+    #[serde(alias = "o")]
     open: String,
+    #[serde(alias = "h")]
     high: String,
+    #[serde(alias = "l")]
     low: String,
+    #[serde(alias = "c")]
     close: String,
+    #[serde(alias = "v")]
     volume: String,
-    close_time: u64,
+    #[serde(alias = "T")]
+    tstamp_close: u64,
+    #[serde(alias = "q")]
     quote_asset_volume: String,
+    #[serde(alias = "n")]
     number_of_trades: u32,
-    ignore1: String,
-    ignore2: String,
-    ignore3: String,
+    #[serde(alias = "x", default)]
+    kline_close: bool,
 }
 #[derive(Debug, serde::Deserialize, Clone)]
 struct ListenKey {
@@ -276,43 +299,29 @@ struct AccountStatus {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct LiveCandle {
-    #[serde(alias = "t")]
-    tstamp_open: u64,
-    #[serde(alias = "T")]
-    tstamp_close: u64,
-    #[serde(alias = "i")]
-    interval: String,
-    #[serde(alias = "s")]
-    symbol: String,
-    #[serde(alias = "o")]
-    open: String,
-    #[serde(alias = "l")]
-    low: String,
-    #[serde(alias = "h")]
-    high: String,
-    #[serde(alias = "c")]
-    close: String,
-    #[serde(alias = "x")]
-    kline_close: bool,
-    #[serde(alias = "v")]
-    volume: String,
-}
-#[derive(Debug, serde::Deserialize)]
 struct LiveCandleMsg {
     #[serde(alias = "E")]
     tstamp_open: u64,
     #[serde(alias = "s")]
     symbol: String,
     #[serde(alias = "k")]
-    candle: LiveCandle,
+    candle: Candle,
 }
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum Side {
     #[serde(alias = "BUY")]
     Buy,
     #[serde(alias = "SELL")]
     Sell,
+}
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum Type {
+    #[serde(alias = "MARKET")]
+    Market,
+    #[serde(alias = "LIMIT")]
+    Limit,
+    #[serde(alias = "STOP_LOSS")]
+    StopLoss,
 }
 #[derive(Debug, serde::Deserialize)]
 enum OrderStatus {
@@ -331,6 +340,7 @@ enum OrderStatus {
     #[serde(alias = "EXPIRED")]
     Expired,
 }
+
 #[derive(Debug, serde::Deserialize)]
 struct LiveOrderUpdate {
     #[serde(alias = "E")]
@@ -353,7 +363,7 @@ struct LiveOrderUpdate {
     #[serde(alias = "p")]
     order_price: String,
     #[serde(alias = "o")]
-    order_type: String,
+    order_type: Type,
 }
 #[derive(Debug, serde::Deserialize)]
 struct Balance {
@@ -371,6 +381,7 @@ struct LiveAccountUpdate {
     #[serde(alias = "B")]
     balances: Vec<Balance>,
 }
+
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum LiveMessageType {
@@ -378,12 +389,27 @@ enum LiveMessageType {
     OrderUpdate(LiveOrderUpdate),
     AccountUpdate(LiveAccountUpdate),
 }
+
 #[derive(Debug, serde::Deserialize)]
 struct LiveMessage {
     //{"stream":"btceur@kline_1m","data": {}}
     stream: String,
     data: LiveMessageType,
 }
+
+#[derive(Debug, serde::Serialize)]
+struct NewOrder {
+    symbol: String,
+    side: Side,
+    #[serde(rename = "type")]
+    o_type: Type,
+    timestamp: u64,
+    #[serde(rename = "newClientOrderId")]
+    reference: String,
+    price: Option<f64>,
+    quantity: f64,
+}
+
 // --------------------------------
 // helper functions
 fn to_interval(interval: &Duration) -> String {
@@ -397,6 +423,7 @@ fn to_interval(interval: &Duration) -> String {
         panic!("duration unknown")
     }
 }
+
 fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     let mut streams: Vec<_> = ticks
         .iter()
@@ -405,7 +432,8 @@ fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     streams.push(String::from(listen_key));
     streams.join("/")
 }
-impl std::convert::From<SymbolInfo> for Symbol {
+
+impl From<SymbolInfo> for Symbol {
     fn from(info: SymbolInfo) -> Self {
         Self {
             pretty: format!("{}-{}", &info.base, &info.quote),
@@ -417,7 +445,8 @@ impl std::convert::From<SymbolInfo> for Symbol {
         }
     }
 }
-impl std::convert::From<Candle> for candles::Candle {
+
+impl From<Candle> for candles::Candle {
     fn from(cnd: Candle) -> Self {
         Self {
             open: cnd.open.parse::<f64>().expect("in cnd.open"),
@@ -425,28 +454,28 @@ impl std::convert::From<Candle> for candles::Candle {
             high: cnd.high.parse::<f64>().expect("in cnd.high"),
             close: cnd.close.parse::<f64>().expect("in cnd.close"),
             volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
-            tstamp: NaiveDateTime::from_timestamp((cnd.open_time / 1000) as i64, 0),
-            tframe: Duration::minutes(1),
+            tstamp: NaiveDateTime::from_timestamp((cnd.tstamp_open / 1000) as i64, 0),
+            tframe: Duration::milliseconds((cnd.tstamp_close - cnd.tstamp_open) as i64 + 1),
         }
     }
 }
-impl std::convert::From<LiveCandleMsg> for candles::Candle {
+impl From<LiveCandleMsg> for candles::Candle {
     fn from(msg: LiveCandleMsg) -> Self {
+        let start = NaiveDateTime::from_timestamp((msg.candle.tstamp_open / 1000) as i64, 0);
+        let stop = NaiveDateTime::from_timestamp((msg.candle.tstamp_close / 1000) as i64, 0);
+        let dur = stop - start + Duration::milliseconds(1);
         Self {
             open: msg.candle.open.parse::<f64>().expect("in cnd.open"),
             low: msg.candle.low.parse::<f64>().expect("in cnd.low"),
             high: msg.candle.high.parse::<f64>().expect("in cnd.high"),
             close: msg.candle.close.parse::<f64>().expect("in cnd.close"),
             volume: msg.candle.volume.parse::<f64>().expect("in cnd.volume"),
-            tstamp: NaiveDateTime::from_timestamp((msg.candle.tstamp_open / 1000) as i64, 0),
-            tframe: Duration::from_std(
-                humantime::parse_duration(&msg.candle.interval).expect("could not parse interval in live candle"),
-            )
-            .expect("to chrono"),
+            tstamp: start,
+            tframe: dur,
         }
     }
 }
-impl std::convert::From<Side> for orders::Side {
+impl From<Side> for orders::Side {
     fn from(side: Side) -> Self {
         match side {
             Side::Buy => orders::Side::Buy,
@@ -454,7 +483,7 @@ impl std::convert::From<Side> for orders::Side {
         }
     }
 }
-impl std::convert::From<LiveOrderUpdate> for Transaction {
+impl From<LiveOrderUpdate> for Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
@@ -464,7 +493,7 @@ impl std::convert::From<LiveOrderUpdate> for Transaction {
             side: msg.side.clone().into(),
             avg_price: tot_price / tot_quantity,
             volume: tot_quantity,
-            order: Order {
+            order: orders::Order {
                 volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
                 exchange: String::from("binance"),
                 expire: None,
@@ -476,7 +505,7 @@ impl std::convert::From<LiveOrderUpdate> for Transaction {
         }
     }
 }
-impl std::convert::From<Vec<Balance>> for SpotWallet {
+impl From<Vec<Balance>> for SpotWallet {
     fn from(mut msg: Vec<Balance>) -> Self {
         Self {
             assets: msg
@@ -486,10 +515,10 @@ impl std::convert::From<Vec<Balance>> for SpotWallet {
         }
     }
 }
-fn to_type(msg_o_type: &str, o_price: f64) -> orders::Type {
+fn to_type(msg_o_type: &Type, o_price: f64) -> orders::Type {
     match msg_o_type {
-        "LIMIT" => orders::Type::Limit(o_price),
-        "MARKET" => orders::Type::Market,
+        Type::Limit => orders::Type::Limit(o_price),
+        Type::Market => orders::Type::Market,
         _ => panic!("unknown type"),
     }
 }
@@ -519,4 +548,38 @@ fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
         }
     }
     None
+}
+
+impl From<orders::Side> for Side {
+    fn from(side: orders::Side) -> Self {
+        match side {
+            orders::Side::Buy => Side::Buy,
+            orders::Side::Sell => Side::Sell,
+        }
+    }
+}
+
+impl From<orders::Order> for NewOrder {
+    fn from(order: orders::Order) -> Self {
+        match order.o_type {
+            orders::Type::Market => Self {
+                symbol: order.symbol,
+                side: order.side.into(),
+                o_type: Type::Market,
+                quantity: order.volume,
+                reference: order.reference.to_string(),
+                timestamp: Utc::now().timestamp_millis() as u64,
+                price: None,
+            },
+            orders::Type::Limit(price) => Self {
+                symbol: order.symbol,
+                side: order.side.into(),
+                o_type: Type::Limit,
+                quantity: order.volume,
+                reference: order.reference.to_string(),
+                timestamp: Utc::now().timestamp_millis() as u64,
+                price: Some(price),
+            },
+        }
+    }
 }

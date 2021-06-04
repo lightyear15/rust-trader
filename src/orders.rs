@@ -25,13 +25,13 @@ pub enum Side {
 
 pub type Id = i64;
 
-//#[derive(PartialEq, Clone, Debug)]
-//pub enum Status {
-//Open(Info),
-//Filled(Transaction),
-//Partial(Transaction),
-//Canceled,
-//}
+#[derive(PartialEq, Clone, Debug)]
+pub enum OrderStatus {
+    Accepted,
+    Rejected,
+    Filled(Transaction),
+    Canceled,
+}
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Order {

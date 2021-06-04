@@ -1,5 +1,7 @@
 use super::candles;
+use super::orders::Transaction;
 use chrono::{Duration, NaiveDateTime};
+use futures_util::TryFutureExt;
 use tokio_postgres::{row, Client, Error, NoTls};
 
 pub struct Candles {
@@ -7,34 +9,26 @@ pub struct Candles {
 }
 
 impl Candles {
-    pub async fn new(host: &str) -> Candles {
-        let (client, connection) = tokio_postgres::connect(host, NoTls)
-            .await
-            .expect("when connecting to postgres");
+    pub async fn new(host: &str) -> Self {
+        let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
         actix_rt::Arbiter::spawn(async move {
             if let Err(e) = connection.await {
                 eprintln!("connection error: {}", e);
             }
         });
-        Candles { client }
+        Self { client }
     }
 
     pub async fn store(&self, exchange: &str, symbol: &str, candles: &[candles::Candle]) -> Result<u64, Error> {
-        let insert_statement = format!(
-            "INSERT INTO {} (symbol, tstamp, open, low, high, close, volume) VALUES",
-            exchange
-            );
+        let insert_statement = format!("INSERT INTO {} (symbol, tstamp, open, low, high, close, volume) VALUES", exchange);
         let mut value_statements: String = candles.iter().fold(String::new(), |statement, cnd| {
             format!(
                 "{},('{}','{}',{},{},{},{},{})",
                 statement, symbol, cnd.tstamp, cnd.open, cnd.low, cnd.high, cnd.close, cnd.volume
-                )
+            )
         });
         value_statements.remove(0);
-        let statement = format!(
-            "{} {} ON CONFLICT(symbol, tstamp) DO NOTHING;",
-            insert_statement, &value_statements
-            );
+        let statement = format!("{} {} ON CONFLICT(symbol, tstamp) DO NOTHING;", insert_statement, &value_statements);
         self.client.execute(statement.as_str(), &[]).await
     }
 
@@ -46,10 +40,10 @@ impl Candles {
         end: &NaiveDateTime,
         interval: &Duration,
         num: usize,
-        ) -> Vec<candles::Candle> {
+    ) -> Vec<candles::Candle> {
         let statement: String;
         let mut chunk_size: usize;
-        let mut tframe :Duration;
+        let mut tframe: Duration;
         if interval.num_hours() == 0 {
             tframe = Duration::minutes(1);
             chunk_size = interval.num_minutes() as usize;
@@ -63,7 +57,7 @@ impl Candles {
                 start_time = start.format("%Y-%m-%d %H:%M:%S"),
                 end_time = end.format("%Y-%m-%d %H:%M:%S"),
                 num = num * chunk_size
-                );
+            );
         } else {
             tframe = Duration::hours(1);
             chunk_size = interval.num_hours() as usize;
@@ -92,7 +86,7 @@ impl Candles {
                 end_time = end.format("%Y-%m-%d %H:%M:%S"),
                 num = num * chunk_size,
                 date_part = date_part,
-                );
+            );
         }
         self.client
             .query(statement.as_str(), &[])
@@ -105,14 +99,14 @@ impl Candles {
             .map(group_candles)
             .collect()
     }
-    pub  async fn find_lower(
+    pub async fn find_lower(
         &self,
         exc: &str,
         sym: &str,
         start: &NaiveDateTime,
         end: &NaiveDateTime,
         price: f64,
-        ) -> Option<chrono::NaiveDateTime> {
+    ) -> Option<chrono::NaiveDateTime> {
         let statement = format!("SELECT tstamp FROM {exchange} WHERE symbol = '{symbol}' AND low <= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}' ORDER BY tstamp LIMIT 1",
                                 exchange = exc,
                                 symbol = sym,
@@ -124,17 +118,18 @@ impl Candles {
             .query(statement.as_str(), &[])
             .await
             .expect("in querying for lower")
-            .first().map(|row| {row.get(0)})
+            .first()
+            .map(|row| row.get(0))
     }
 
-    pub    async fn find_higher(
+    pub async fn find_higher(
         &self,
         exc: &str,
         sym: &str,
         start: &NaiveDateTime,
         end: &NaiveDateTime,
         price: f64,
-        ) -> Option<chrono::NaiveDateTime> {
+    ) -> Option<chrono::NaiveDateTime> {
         let statement = format!("SELECT tstamp FROM {exchange} WHERE symbol = '{symbol}' AND high >= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}' ORDER BY tstamp LIMIT 1",
                                 exchange = exc,
                                 symbol = sym,
@@ -146,11 +141,12 @@ impl Candles {
             .query(statement.as_str(), &[])
             .await
             .expect("in querying for lower")
-            .first().map(|row| {row.get(0)})
+            .first()
+            .map(|row| row.get(0))
     }
 }
 
-fn row_to_candle(row :row::Row, tframe :&chrono::Duration) -> candles::Candle {
+fn row_to_candle(row: row::Row, tframe: &chrono::Duration) -> candles::Candle {
     let mut cnd = candles::Candle {
         tstamp: NaiveDateTime::from_timestamp(0, 0),
         tframe: *tframe,
@@ -180,7 +176,7 @@ fn row_to_candle(row :row::Row, tframe :&chrono::Duration) -> candles::Candle {
             "volume" => {
                 cnd.volume = row.get::<usize, f32>(idx) as f64;
             }
-            _ => {},
+            _ => {}
         };
     }
     cnd
@@ -202,4 +198,26 @@ fn group_candles(cnds: &[candles::Candle]) -> candles::Candle {
         folded.volume += cnd.volume;
         folded
     })
+}
+
+pub struct Transactions {
+    client: Client,
+}
+
+impl Transactions {
+    pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
+        let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
+        let f_ = connection.map_ok(|_x| ()).unwrap_or_else(|e| {
+            println!("error is {:?}", e);
+        });
+        arbiter.send(f_);
+        Self { client }
+    }
+
+    pub async fn store(&self, _exchange: &str, _tx: Transaction) -> Result<u64, Error> {
+        //let statement = format!("INSERTO INTO transactions (exchange, tstamp, ) ")
+
+        //self.client.execute(statement.as_str(), &[]).await
+        Ok(0)
+    }
 }

@@ -4,6 +4,7 @@ use crate::symbol::Symbol;
 use crate::{binance, candles, orders, wallets};
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
+use crate::orders::{Order, Transaction, OrderStatus};
 use std::vec::Vec;
 
 #[async_trait(?Send)]
@@ -18,6 +19,7 @@ pub trait RestApi {
     async fn get_symbol_info(&self, sym: &str) -> Result<Symbol, Error>;
     async fn get_wallet(&self) -> Result<wallets::SpotWallet,Error>;
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String;
+    async fn send_order(&self, order : Order) -> OrderStatus;
 }
 
 pub fn create_rest_client(exchange: &str, config: &ExchangeSettings) -> Result<Box<dyn RestApi>, Error> {
