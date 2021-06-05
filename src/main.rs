@@ -93,8 +93,9 @@ async fn main() {
                     .expect("can't find the exchange in config")
                     .clone();
 
+                let tx_storage: String = settings.transaction_storage.clone();
                 actix_rt::Arbiter::spawn(async move {
-                    run_live(strat, exc_sett).await;
+                    run_live(strat, exc_sett, &tx_storage).await;
                 });
                 //let f = async {
                 //};
@@ -104,7 +105,7 @@ async fn main() {
         }
     };
 }
-async fn run_live(strategy_settings: StrategySettings, exchange_settings: ExchangeSettings) {
+async fn run_live(strategy_settings: StrategySettings, exchange_settings: ExchangeSettings, storage_url: &str) {
     let ticks: Vec<_> = vec![drivers::Tick {
         sym: strategy_settings.symbol.clone(),
         interval: strategy_settings.time_frame,
@@ -122,5 +123,7 @@ async fn run_live(strategy_settings: StrategySettings, exchange_settings: Exchan
         strategy_settings.time_frame,
     )
     .expect("strategies::create");
-    live::run_live(strategy, rest, live).await;
+    let mut cur_arbiter = actix_rt::Arbiter::current();
+    let storage = storage::Transactions::new(storage_url, &mut cur_arbiter).await;
+    live::run_live(strategy, rest, live, storage).await;
 }

@@ -23,6 +23,15 @@ pub enum Side {
     Sell,
 }
 
+impl ToString for Side {
+    fn to_string(&self) -> String {
+        match self {
+            Side::Sell => String::from("Sell"),
+            Side::Buy => String::from("Buy"),
+        }
+    }
+}
+
 pub type Id = i64;
 
 #[derive(PartialEq, Clone, Debug)]

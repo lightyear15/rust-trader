@@ -8,6 +8,18 @@ pub struct Candles {
     client: Client,
 }
 
+/*
+CREATE TABLE binance (
+symbol varchar(16) NOT NULL,
+tstamp timestamp NOT NULL,
+"open" float4 NULL,
+low float4 NULL,
+high float4 NULL,
+"close" float4 NULL,
+volume float4 NULL,
+CONSTRAINT binance_pkey PRIMARY KEY (symbol, tstamp)
+);
+ */
 impl Candles {
     pub async fn new(host: &str) -> Self {
         let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
@@ -204,6 +216,18 @@ pub struct Transactions {
     client: Client,
 }
 
+/*
+create table transactions (
+exchange varchar(32) not null,
+symbol varchar(16) not null,
+tstamp timestamp not null,
+side varchar(16) not null,
+price float4 not null,
+volume float4 not null,
+reference int not null,
+constraint transactions_pkey primary key (exchange, symbol, tstamp, reference)
+)
+*/
 impl Transactions {
     pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
         let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
@@ -214,10 +238,18 @@ impl Transactions {
         Self { client }
     }
 
-    pub async fn store(&self, _exchange: &str, _tx: Transaction) -> Result<u64, Error> {
-        //let statement = format!("INSERTO INTO transactions (exchange, tstamp, ) ")
-
-        //self.client.execute(statement.as_str(), &[]).await
-        Ok(0)
+    pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
+        let statement = format!(
+            "INSERTO INTO transactions (exchange, symbol, tstamp, side, price, volume, reference)
+                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {})",
+            exchange,
+            tx.symbol,
+            tx.tstamp,
+            tx.side.to_string(),
+            tx.avg_price,
+            tx.volume,
+            tx.order.reference
+        );
+        self.client.execute(statement.as_str(), &[]).await
     }
 }

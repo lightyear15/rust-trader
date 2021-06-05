@@ -10,6 +10,7 @@ edition = "2018"
 config = {version = "0.11"}
 serde = {version = "1", features = ["derive", "std"]}
 serde_json = {version = "1"}
+serde_qs = {version = "0"}
 rand = {version = "0.8"}
 chrono = {version = "0.4", features = ["serde"]}
 structopt = { version = "0.3", default-features = false }

@@ -143,10 +143,11 @@ impl RestApi for Rest {
         wl.sort_by_key(|shot| shot.tstamp);
         Ok(wl.remove(wl.len() - 1).data.balances.into())
     }
+
     async fn send_order(&self, order: orders::Order) -> orders::OrderStatus {
         let url = self.url.clone() + "/api/v3/order";
         let order_request: NewOrder = order.into();
-        let body = serde_json::to_string(&order_request).expect("in send_order to_string");
+        let body = serde_qs::to_string(&order_request).expect("in send_order to_string");
         let signature = Signer::new(MessageDigest::sha256(), &self.secret)
             .expect("in creating the signer")
             .sign_oneshot_to_vec(body.as_bytes())
@@ -158,13 +159,36 @@ impl RestApi for Rest {
         let request = self
             .client
             .post(url)
-            .query(&[("signature", signature.as_str()),
-            ("newOrderResponseType", "ACK")])
+            .query(&[("signature", signature.as_str()), ("newOrderResponseType", "ACK")])
             .expect("in send_order adding signature")
-            .send_json(&body);
+            .send_form(&body);
         let resp_code = request.await.expect("in receiving server response").status();
         if resp_code.is_success() {
-        orders::OrderStatus::Accepted
+            orders::OrderStatus::Accepted
+        } else {
+            orders::OrderStatus::Rejected
+        }
+    }
+
+    async fn cancel_order(&self, symbol: String, reference: i32) -> orders::OrderStatus {
+        let url = self.url.clone() + "/api/v3/order";
+        let cancel = CancelOrder::new(symbol, reference);
+        let body = serde_qs::to_string(&cancel).expect("in cancel_order to_string");
+        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
+            .expect("in creating the signer")
+            .sign_oneshot_to_vec(body.as_bytes())
+            .expect("in digesting body")
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<Vec<_>>()
+            .join("");
+        let request = self.client.delete(url)
+            .query(&[("signature", signature.as_str())])
+            .expect("in send_order adding signature")
+            .send_form(&body);
+        let resp_code = request.await.expect("in receiving server response").status();
+        if resp_code.is_success() {
+            orders::OrderStatus::Canceled
         } else {
             orders::OrderStatus::Rejected
         }
@@ -410,6 +434,14 @@ struct NewOrder {
     quantity: f64,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct CancelOrder {
+    symbol: String,
+    #[serde(rename = "origClientOderId")]
+    reference: String,
+    timestamp: u64,
+}
+
 // --------------------------------
 // helper functions
 fn to_interval(interval: &Duration) -> String {
@@ -580,6 +612,16 @@ impl From<orders::Order> for NewOrder {
                 timestamp: Utc::now().timestamp_millis() as u64,
                 price: Some(price),
             },
+        }
+    }
+}
+
+impl CancelOrder {
+    fn new(symbol: String, reference: i32) -> Self {
+        Self {
+            symbol,
+            reference : reference.to_string(),
+            timestamp: Utc::now().timestamp_millis() as u64,
         }
     }
 }

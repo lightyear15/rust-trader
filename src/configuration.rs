@@ -19,6 +19,7 @@ pub struct StrategySettings {
 pub struct Settings {
     pub exchanges : HashMap<String, ExchangeSettings>,
     pub candle_storage: String,
+    pub transaction_storage: String,
     pub strategies: Vec<StrategySettings>,
 }
 

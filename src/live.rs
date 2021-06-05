@@ -1,14 +1,19 @@
 use crate::drivers::{LiveEvent, LiveFeed, RestApi};
 use crate::orders::Order;
-use crate::strategies::{SpotSinglePairStrategy, Action};
+use crate::storage;
+use crate::strategies::{Action, SpotSinglePairStrategy};
 use std::collections::VecDeque;
 
-pub async fn run_live(mut strategy: Box<dyn SpotSinglePairStrategy>, rest: Box<dyn RestApi>, mut feed: Box<dyn LiveFeed>) {
+pub async fn run_live(
+    mut strategy: Box<dyn SpotSinglePairStrategy>,
+    rest: Box<dyn RestApi>,
+    mut feed: Box<dyn LiveFeed>,
+    tx_storage: storage::Transactions,
+) {
     println!("starting strategy {}", strategy.name());
     println!("on symbol {:?}", strategy.symbol());
     let hist_size = strategy.get_candles_history_size();
-    rest
-        .get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
+    rest.get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
         .await;
     let mut cnds = rest
         .get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
@@ -33,6 +38,7 @@ pub async fn run_live(mut strategy: Box<dyn SpotSinglePairStrategy>, rest: Box<d
             }
             LiveEvent::Transaction(tx) => {
                 orders.retain(|ord| ord.reference != tx.order.reference);
+                tx_storage.store(strategy.exchange(), &tx).await.expect("in storing new transaction");
                 strategy.on_new_transaction(orders.as_slice(), &tx)
             }
             LiveEvent::NewOrder(order) => {
@@ -52,9 +58,13 @@ pub async fn run_live(mut strategy: Box<dyn SpotSinglePairStrategy>, rest: Box<d
         match action {
             Action::NewOrder(order) => {
                 println!("received a new order action {:?}", order);
+                let status = rest.send_order(order).await;
+                println!("order status {:?}", status);
             }
             Action::CancelOrder(reference) => {
                 println!("received a cancel order action {:?}", reference);
+                let status = rest.cancel_order(strategy.symbol().symbol.clone(), reference).await;
+                println!("cancel order status {:?}", status);
             }
             Action::None => {
                 println!("action of doing nothing");
