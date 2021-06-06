@@ -83,7 +83,8 @@ async fn main() {
             let res = backtest_spot_singlepair(storage, strategy, start, end)
                 .await
                 .expect("backtest epic fail");
-            println!("Backtest {:?}", res);
+            println!("Backtest statistics {:?}", res.0);
+            println!("Backtest final wallet{:?}", res.1);
         }
         Trade::Live {} => {
             for strat in settings.strategies {

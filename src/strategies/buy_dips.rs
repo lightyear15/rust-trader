@@ -1,8 +1,11 @@
-use crate::wallets::SpotWallet;
 use crate::candles::Candle;
-use crate::orders::{Order, Transaction, Side, Type};
-use crate::strategies::{SpotSinglePairStrategy, Action};
+use crate::orders::{Order, Side, Transaction, Type};
+use crate::strategies::{Action, SpotSinglePairStrategy};
 use crate::symbol::Symbol;
+use crate::wallets::SpotWallet;
+
+const PERIOD: usize = 10;
+const GAIN_FACTOR: f64 = 0.03;
 
 #[derive(Clone)]
 pub struct BuyDips {
@@ -13,53 +16,46 @@ pub struct BuyDips {
 
 impl BuyDips {
     pub fn new(exchange: String, sym: Symbol, time_frame: chrono::Duration) -> Self {
-        Self {
-            exchange,
-            sym,
-            time_frame,
-        }
+        Self { exchange, sym, time_frame }
     }
 }
 
 impl SpotSinglePairStrategy for BuyDips {
     fn name(&self) -> String {
-        format!("BuyDips-{}-{}-{}",self.exchange, self.sym.to_string(), self.time_frame.to_string())
+        format!("BuyDips-{}-{}-{}", self.exchange, self.sym.to_string(), self.time_frame.to_string())
     }
-    fn on_new_candle(&mut self, wallet :&SpotWallet, _outstanding_orders: &[Order], history : &[Candle]) -> Action{
+    fn on_new_candle(&mut self, wallet: &SpotWallet, _outstanding_orders: &[Order], history: &[Candle]) -> Action {
         let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
         let current_price = history.last().expect("last candle").close;
         if current_price < avg {
-            let order = Order {
-                exchange: self.exchange.clone(),
-                symbol: self.sym.symbol.clone(),
-                side: Side::Buy,
-                o_type: Type::Market,
-                volume: wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * 0.05 / current_price,
-                expire: None,
-                reference: 0,
-            };
+            let mut order = Order::default();
+            order.exchange = self.exchange.clone();
+            order.symbol = self.sym.symbol.clone();
+            order.side = Side::Buy;
+            order.o_type = Type::Market;
+            order.volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * GAIN_FACTOR / current_price;
+            order.expire = None;
             return Action::NewOrder(order);
         }
         Action::None
     }
-    fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action{
+    fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action {
         if tx.side == Side::Sell {
             return Action::None;
         }
-        let price = tx.avg_price * 1.05;
-        let volume = tx.volume / 1.05;
-        Action::NewOrder(Order {
-            exchange: self.exchange.clone(),
-            symbol: self.sym.symbol.clone(),
-            side: Side::Sell,
-            o_type: Type::Limit(price),
-            volume,
-            expire: None,
-            reference: 0,
-        })
+        let price = tx.avg_price * (1.0 + GAIN_FACTOR);
+        let volume = tx.volume / (1.0 + GAIN_FACTOR);
+        let mut order = Order::default();
+        order.exchange = self.exchange.clone();
+        order.symbol = self.sym.symbol.clone();
+        order.side = Side::Sell;
+        order.o_type = Type::Limit(price);
+        order.volume = volume;
+        order.expire = None;
+        Action::NewOrder(order)
     }
     fn get_candles_history_size(&self) -> usize {
-        5
+        PERIOD
     }
 
     fn exchange(&self) -> &str {

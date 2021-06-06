@@ -248,8 +248,7 @@ impl Transactions {
             tx.side.to_string(),
             tx.avg_price,
             tx.volume,
-            tx.order.reference
-        );
+            tx.order.id        );
         self.client.execute(statement.as_str(), &[]).await
     }
 }

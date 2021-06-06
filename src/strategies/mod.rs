@@ -14,7 +14,7 @@ pub use sample::Sample;
 pub enum Action {
     None,
     NewOrder(Order),
-    CancelOrder(i32),
+    CancelOrder(u32),
 }
 
 // a 1-symbol strategy
@@ -27,19 +27,6 @@ pub trait SpotSinglePairStrategy {
     fn exchange(&self) -> &str;
     fn symbol(&self) -> &Symbol;
     fn time_frame(&self) -> &chrono::Duration;
-
-    fn new_order(&self, refer: Option<i32>) -> Order {
-        Order {
-            o_type: Type::Market,
-            side: Side::Buy,
-            volume: 0.0,
-
-            expire: None,
-            exchange: String::from(self.exchange()),
-            symbol: self.symbol().symbol.clone(),
-            reference: refer.unwrap_or_else(rand::random::<i32>),
-        }
-    }
 }
 
 pub fn create(
@@ -79,8 +66,8 @@ impl Statistics {
         }
     }
     pub fn update_with_last_prices(&mut self, wallet: &SpotWallet, prices: &HashMap<String, f64>) {
-        let balance = prices.iter().fold(0.0, |balance, (sym, price)| {
-            balance + wallet.assets.get(sym).unwrap_or(&0.0) * price
+        let balance = wallet.assets.iter().fold(0.0, |balance, (sym, price)| {
+            balance + prices.get(sym).expect("coin in wallet missing from price list") * price
         });
         self.balance = balance;
         if balance < self.lowest_balance {

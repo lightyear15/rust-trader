@@ -37,8 +37,11 @@ pub async fn run_live(
                 return;
             }
             LiveEvent::Transaction(tx) => {
-                orders.retain(|ord| ord.reference != tx.order.reference);
-                tx_storage.store(strategy.exchange(), &tx).await.expect("in storing new transaction");
+                orders.retain(|ord| ord.id != tx.order.id);
+                tx_storage
+                    .store(strategy.exchange(), &tx)
+                    .await
+                    .expect("in storing new transaction");
                 strategy.on_new_transaction(orders.as_slice(), &tx)
             }
             LiveEvent::NewOrder(order) => {
@@ -61,9 +64,9 @@ pub async fn run_live(
                 let status = rest.send_order(order).await;
                 println!("order status {:?}", status);
             }
-            Action::CancelOrder(reference) => {
-                println!("received a cancel order action {:?}", reference);
-                let status = rest.cancel_order(strategy.symbol().symbol.clone(), reference).await;
+            Action::CancelOrder(id) => {
+                println!("received a cancel order action {:?}", id);
+                let status = rest.cancel_order(strategy.symbol().symbol.clone(), id).await;
                 println!("cancel order status {:?}", status);
             }
             Action::None => {

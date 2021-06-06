@@ -170,9 +170,9 @@ impl RestApi for Rest {
         }
     }
 
-    async fn cancel_order(&self, symbol: String, reference: i32) -> orders::OrderStatus {
+    async fn cancel_order(&self, symbol: String, order_id: u32) -> orders::OrderStatus {
         let url = self.url.clone() + "/api/v3/order";
-        let cancel = CancelOrder::new(symbol, reference);
+        let cancel = CancelOrder::new(symbol, order_id);
         let body = serde_qs::to_string(&cancel).expect("in cancel_order to_string");
         let signature = Signer::new(MessageDigest::sha256(), &self.secret)
             .expect("in creating the signer")
@@ -294,6 +294,12 @@ struct Candle {
     quote_asset_volume: String,
     #[serde(alias = "n")]
     number_of_trades: u32,
+    #[serde(default)]
+    ignore1: String,
+    #[serde(default)]
+    ignore2: String,
+    #[serde(default)]
+    ignore3: String,
     #[serde(alias = "x", default)]
     kline_close: bool,
 }
@@ -429,7 +435,7 @@ struct NewOrder {
     o_type: Type,
     timestamp: u64,
     #[serde(rename = "newClientOrderId")]
-    reference: String,
+    id: String,
     price: Option<f64>,
     quantity: f64,
 }
@@ -531,7 +537,7 @@ impl From<LiveOrderUpdate> for Transaction {
                 expire: None,
                 side: msg.side.into(),
                 symbol: msg.symbol,
-                reference: msg.order_id.parse::<i32>().expect("in msg.order_id"),
+                id: msg.order_id.parse::<u32>().expect("in msg.order_id"),
                 o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
             },
         }
@@ -599,7 +605,7 @@ impl From<orders::Order> for NewOrder {
                 side: order.side.into(),
                 o_type: Type::Market,
                 quantity: order.volume,
-                reference: order.reference.to_string(),
+                id: order.id.to_string(),
                 timestamp: Utc::now().timestamp_millis() as u64,
                 price: None,
             },
@@ -608,7 +614,7 @@ impl From<orders::Order> for NewOrder {
                 side: order.side.into(),
                 o_type: Type::Limit,
                 quantity: order.volume,
-                reference: order.reference.to_string(),
+                id: order.id.to_string(),
                 timestamp: Utc::now().timestamp_millis() as u64,
                 price: Some(price),
             },
@@ -617,10 +623,10 @@ impl From<orders::Order> for NewOrder {
 }
 
 impl CancelOrder {
-    fn new(symbol: String, reference: i32) -> Self {
+    fn new(symbol: String, order_id: u32) -> Self {
         Self {
             symbol,
-            reference : reference.to_string(),
+            reference : order_id.to_string(),
             timestamp: Utc::now().timestamp_millis() as u64,
         }
     }

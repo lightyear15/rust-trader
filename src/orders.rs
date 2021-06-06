@@ -1,4 +1,5 @@
 use chrono::NaiveDateTime;
+use rand::prelude::random;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TimeInForce {
@@ -50,19 +51,24 @@ pub struct Order {
     pub o_type: Type,
     pub volume: f64,
     pub expire: Option<chrono::NaiveDateTime>,
-    pub reference: i32,
+    pub id: u32,
 }
-impl Default for Order {
-    fn default() -> Self {
-        Order {
+impl Order {
+    pub fn new() -> Self {
+        Self {
             exchange: String::new(),
             symbol: String::new(),
             side: Side::Buy,
             o_type: Type::Market,
             volume: 0.0,
             expire: None,
-            reference: 0,
+            id: random(),
         }
+    }
+}
+impl Default for Order {
+    fn default() -> Self {
+        Order::new()
     }
 }
 

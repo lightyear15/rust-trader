@@ -15,12 +15,13 @@ pub async fn backtest_spot_singlepair(
     mut strategy: Box<dyn SpotSinglePairStrategy>,
     start: NaiveDate,
     end: NaiveDate,
-) -> Result<Statistics, Error> {
+) -> Result<(Statistics, wallets::SpotWallet), Error> {
     // set up
     let end_t = end.and_hms(0, 0, 0);
     let mut start_time = start.and_hms(0, 0, 0);
     let depth = strategy.get_candles_history_size();
     let mut tstamp = start_time + (*(strategy.time_frame()) * (depth as i32));
+    //let steps = (end - start).num_minutes() / strategy.time_frame().num_minutes();
 
     // preparing the environment
     let mut wallet = wallets::SpotWallet { assets: HashMap::new() };
@@ -32,7 +33,13 @@ pub async fn backtest_spot_singlepair(
     // performance tracking
     let mut stats = Statistics::new(STARTING_BALANCE);
 
+    //let mut idx = 0;
+    //let mut bar = progress::Bar::new();
+    //bar.set_job_title("backtesting");
     while tstamp < end_t {
+        //idx +=1;
+        //bar.reach_percent((idx * 100) / steps as i32);
+
         // gather current candles
         let mut cnds = storage
             .get(
@@ -80,22 +87,17 @@ pub async fn backtest_spot_singlepair(
                 if let Some(tp_sl_or) = order_from_tp_sl_tx(&tx) {
                     outstanding_orders.push(tp_sl_or);
                 }
-                update_wallet(&tx, strategy.symbol(), &mut wallet);
-                outstanding_orders.retain(|or| or.reference != tx.order.reference);
-                stats.update_with_transaction(&tx);
 
+                outstanding_orders.retain(|or| {or.id != tx.order.id});
                 let action = strategy.on_new_transaction(outstanding_orders.as_slice(), &tx);
+
+                stats.update_with_transaction(&tx);
+                update_wallet(&tx, strategy.symbol(), &mut wallet);
+
+                println!("TX {:?} - {:?} -  {:?}", tx.tstamp, tx.side, wallet.assets);
+
                 transactions.push(tx);
-                match action {
-                    Action::NewOrder(or) => {
-                        stats.update_with_order(&or);
-                        outstanding_orders.push(or);
-                    }
-                    Action::CancelOrder(reference) => {
-                        outstanding_orders.retain(|or| or.reference != reference);
-                    }
-                    _ => {}
-                }
+                on_action(action, &mut stats, &mut outstanding_orders);
             } else {
                 break;
             }
@@ -107,21 +109,13 @@ pub async fn backtest_spot_singlepair(
         price_update.insert(strategy.symbol().quote.clone(), 1.0);
         stats.update_with_last_prices(&wallet, &price_update);
         let action = strategy.on_new_candle(&wallet, outstanding_orders.as_slice(), cnds.as_slice());
-        match action {
-            Action::NewOrder(or) => {
-                stats.update_with_order(&or);
-                outstanding_orders.push(or);
-            }
-            Action::CancelOrder(reference) => {
-                outstanding_orders.retain(|or| or.reference != reference);
-            }
-            _ => {}
-        }
+        on_action(action, &mut stats, &mut outstanding_orders);
 
         tstamp += *(strategy.time_frame());
         start_time = tstamp - (*(strategy.time_frame()) * depth as i32);
     }
-    Ok(stats)
+    //bar.jobs_done();
+    Ok((stats, wallet))
 }
 
 fn order_in_candle(ord: &Order, last: &Candle) -> bool {
@@ -154,7 +148,7 @@ async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Can
                 .await
                 .ok_or_else(|| Error::ErrNotFound(format!("can't find lower for {}", *buy_p)))?;
             tx.avg_price = *buy_p;
-            tx.tstamp = utils::generate_random_tstamp(&t, &(t + Duration::minutes(1)));
+            tx.tstamp = t;
             Ok(tx)
         }
         (Type::Limit(sell_p), Side::Sell) => {
@@ -163,7 +157,7 @@ async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Can
                 .await
                 .ok_or_else(|| Error::ErrNotFound(format!("can't find higher for {}", *sell_p)))?;
             tx.avg_price = *sell_p;
-            tx.tstamp = utils::generate_random_tstamp(&t, &(t + Duration::minutes(1)));
+            tx.tstamp = t;
             Ok(tx)
         } //(_, _) => Err(Error::Done),
     }
@@ -185,4 +179,19 @@ fn update_wallet(tx: &Transaction, sym: &Symbol, wallet: &mut wallets::SpotWalle
 
 fn order_from_tp_sl_tx(_tx: &Transaction) -> Option<Order> {
     None
+}
+
+fn on_action(action: Action, stats: &mut Statistics, outstanding_orders: &mut Vec<Order>) {
+    match action {
+        Action::NewOrder(or) => {
+            //println!("received new order {:?}", or);
+            stats.update_with_order(&or);
+            outstanding_orders.push(or);
+        }
+        Action::CancelOrder(id) => {
+            //println!("received cancel order {}", reference);
+            outstanding_orders.retain(|or| {or.id != id});
+        }
+        _ => {}
+    }
 }

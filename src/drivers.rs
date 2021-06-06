@@ -20,7 +20,7 @@ pub trait RestApi {
     async fn get_wallet(&self) -> Result<wallets::SpotWallet,Error>;
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String;
     async fn send_order(&self, order : Order) -> OrderStatus;
-    async fn cancel_order(&self, symbol: String, reference : i32) -> OrderStatus;
+    async fn cancel_order(&self, symbol: String, order_id : u32) -> OrderStatus;
 }
 
 pub fn create_rest_client(exchange: &str, config: &ExchangeSettings) -> Result<Box<dyn RestApi>, Error> {
