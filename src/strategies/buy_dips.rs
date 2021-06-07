@@ -4,7 +4,7 @@ use crate::strategies::{Action, SpotSinglePairStrategy};
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
 
-const PERIOD: usize = 10;
+const PERIOD: usize = 240;
 const GAIN_FACTOR: f64 = 0.03;
 
 #[derive(Clone)]
@@ -26,8 +26,8 @@ impl SpotSinglePairStrategy for BuyDips {
     }
     fn on_new_candle(&mut self, wallet: &SpotWallet, _outstanding_orders: &[Order], history: &[Candle]) -> Action {
         let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
-        let current_price = history.last().expect("last candle").close;
-        if current_price < avg {
+        let current_price = history.first().expect("last candle").close;
+        if current_price < (avg / (1.0 + GAIN_FACTOR)) {
             let mut order = Order::default();
             order.exchange = self.exchange.clone();
             order.symbol = self.sym.symbol.clone();

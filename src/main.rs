@@ -98,9 +98,6 @@ async fn main() {
                 actix_rt::Arbiter::spawn(async move {
                     run_live(strat, exc_sett, &tx_storage).await;
                 });
-                //let f = async {
-                //};
-                //arbiter.send(run_live(strat.exchange.clone(), exc_sett, tick));
             }
             actix_rt::Arbiter::local_join().await;
         }
@@ -114,7 +111,7 @@ async fn run_live(strategy_settings: StrategySettings, exchange_settings: Exchan
     let rest = drivers::create_rest_client(&strategy_settings.exchange, &exchange_settings).expect("in create_rest_client");
     let sym_info = rest.get_symbol_info(&strategy_settings.symbol).await.expect("no symbol info");
     let listen_key = rest.refresh_ws_token(None).await;
-    let live = drivers::create_live_driver(&strategy_settings.exchange, &listen_key, ticks.as_slice())
+    let live = drivers::create_live_driver(&strategy_settings.exchange, listen_key, ticks)
         .await
         .expect("could not create exchange drivers");
     let strategy = strategies::create(

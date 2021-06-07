@@ -18,10 +18,10 @@ pub async fn backtest_spot_singlepair(
 ) -> Result<(Statistics, wallets::SpotWallet), Error> {
     // set up
     let end_t = end.and_hms(0, 0, 0);
-    let mut start_time = start.and_hms(0, 0, 0);
+    let start_t = start.and_hms(0, 0, 0);
+    let mut start_time = start_t;
     let depth = strategy.get_candles_history_size();
     let mut tstamp = start_time + (*(strategy.time_frame()) * (depth as i32));
-    //let steps = (end - start).num_minutes() / strategy.time_frame().num_minutes();
 
     // preparing the environment
     let mut wallet = wallets::SpotWallet { assets: HashMap::new() };
@@ -33,12 +33,11 @@ pub async fn backtest_spot_singlepair(
     // performance tracking
     let mut stats = Statistics::new(STARTING_BALANCE);
 
-    //let mut idx = 0;
-    //let mut bar = progress::Bar::new();
-    //bar.set_job_title("backtesting");
+    let mut bar = progress::Bar::new();
+    bar.set_job_title("backtesting");
     while tstamp < end_t {
-        //idx +=1;
-        //bar.reach_percent((idx * 100) / steps as i32);
+        let perc = (tstamp - start_t).num_minutes() * 100 / (end_t - start_t).num_minutes();
+        bar.reach_percent(perc as i32);
 
         // gather current candles
         let mut cnds = storage
@@ -55,7 +54,7 @@ pub async fn backtest_spot_singlepair(
             break;
         }
         cnds.reverse();
-        let last = cnds.last().unwrap();
+        let last = cnds.first().unwrap();
 
         // check outstanding orders with current candle
         // any expired orders?
@@ -94,7 +93,7 @@ pub async fn backtest_spot_singlepair(
                 stats.update_with_transaction(&tx);
                 update_wallet(&tx, strategy.symbol(), &mut wallet);
 
-                println!("TX {:?} - {:?} -  {:?}", tx.tstamp, tx.side, wallet.assets);
+                //println!("TX {:?} - {:?} -  {:?}", tx.tstamp, tx.side, wallet.assets);
 
                 transactions.push(tx);
                 on_action(action, &mut stats, &mut outstanding_orders);
@@ -114,7 +113,7 @@ pub async fn backtest_spot_singlepair(
         tstamp += *(strategy.time_frame());
         start_time = tstamp - (*(strategy.time_frame()) * depth as i32);
     }
-    //bar.jobs_done();
+    bar.jobs_done();
     Ok((stats, wallet))
 }
 

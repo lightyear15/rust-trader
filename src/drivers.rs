@@ -50,12 +50,15 @@ pub struct Tick {
 #[async_trait(?Send)]
 pub trait LiveFeed {
     async fn next(&mut self) -> LiveEvent;
+    fn token(&self) -> String;
+    async fn reconnect(&mut self, new_key: String);
+
 }
 
-pub async fn create_live_driver(exchange :&str, listen_key: &str, ticks: &[Tick]) -> Result<Box<dyn LiveFeed>, Error> {
+pub async fn create_live_driver(exchange :&str, listen_key: String, ticks: Vec<Tick>) -> Result<Box<dyn LiveFeed>, Error> {
     match exchange {
         "binance" => {
-            let live = Box::new(binance::Live::new(ticks, &listen_key).await);
+            let live = Box::new(binance::Live::new(ticks, listen_key).await);
             Ok(live)
         }
         _ => Err(Error::ErrNotFound(format!("can't find driver {}", exchange))),

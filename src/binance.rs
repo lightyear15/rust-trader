@@ -198,15 +198,15 @@ impl RestApi for Rest {
 type WsConnection = actix_codec::Framed<BoxedSocket, Codec>;
 pub struct Live {
     ticks: Vec<Tick>,
+    token: String,
     url: String,
-    hb: DateTime<Utc>,
     ws_conn: WsConnection,
 }
 
 impl Live {
-    pub async fn new(ticks: &[Tick], listen_key: &str) -> Self {
+    pub async fn new(ticks: Vec<Tick>, listen_key: String) -> Self {
         let base_url = String::from("wss://stream.binance.com:9443/stream?streams=");
-        let stream_list = build_stream_list(ticks, listen_key);
+        let stream_list = build_stream_list(ticks.as_slice(), &listen_key);
         let url = base_url.clone() + &stream_list;
         let (resp, conn) = Client::builder()
             .max_http_version(awc::http::Version::HTTP_11)
@@ -217,16 +217,34 @@ impl Live {
             .expect("on ws connecting to binance");
         println!("new response {:?}", resp);
         Self {
-            ticks: ticks.to_vec(),
+            ticks,
+            token : listen_key,
             url: base_url,
             ws_conn: conn,
-            hb: Utc::now(),
         }
     }
 }
 
 #[async_trait(?Send)]
 impl LiveFeed for Live {
+    fn token(&self) -> String {
+        self.token.clone()
+    }
+    async fn reconnect(&mut self, new_key: String){
+        let stream_list = build_stream_list(self.ticks.as_slice(), &new_key);
+        let url = self.url.clone() + &stream_list;
+        let (resp, conn) = Client::builder()
+            .max_http_version(awc::http::Version::HTTP_11)
+            .finish()
+            .ws(url)
+            .connect()
+            .await
+            .expect("on ws connecting to binance");
+        self.ws_conn = conn;
+        println!("new response {:?}", resp);
+        self.token = new_key;
+    }
+
     async fn next(&mut self) -> LiveEvent {
         loop {
             let nnext = self.ws_conn.next().await;

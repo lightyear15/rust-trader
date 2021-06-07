@@ -34,7 +34,10 @@ pub async fn run_live(
             }
             LiveEvent::ReconnectionRequired => {
                 println!("ReconnectionRequired");
-                return;
+                let old_token = feed.token();
+                let new_token = rest.refresh_ws_token(Some(old_token)).await;
+                feed.reconnect(new_token).await;
+                Action::None
             }
             LiveEvent::Transaction(tx) => {
                 orders.retain(|ord| ord.id != tx.order.id);

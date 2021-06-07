@@ -20,6 +20,7 @@ pub enum Action {
 // a 1-symbol strategy
 pub trait SpotSinglePairStrategy {
     fn name(&self) -> String;
+    // candles are handed in reverse order, i.e. last candle is first item in the slice
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action;
     fn on_new_transaction(&mut self, outstanding_orders: &[Order], tx: &Transaction) -> Action;
 
