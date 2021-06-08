@@ -6,17 +6,25 @@ use crate::wallets::SpotWallet;
 
 const PERIOD: usize = 240;
 const GAIN_FACTOR: f64 = 0.03;
+const MAX_OPS: usize = 10;
 
 #[derive(Clone)]
 pub struct BuyDips {
     exchange: String,
     sym: Symbol,
     time_frame: chrono::Duration,
+    // custom params
+    ongoing_ops: usize,
 }
 
 impl BuyDips {
     pub fn new(exchange: String, sym: Symbol, time_frame: chrono::Duration) -> Self {
-        Self { exchange, sym, time_frame }
+        Self {
+            exchange,
+            sym,
+            time_frame,
+            ongoing_ops: 0,
+        }
     }
 }
 
@@ -25,6 +33,9 @@ impl SpotSinglePairStrategy for BuyDips {
         format!("BuyDips-{}-{}-{}", self.exchange, self.sym.to_string(), self.time_frame.to_string())
     }
     fn on_new_candle(&mut self, wallet: &SpotWallet, _outstanding_orders: &[Order], history: &[Candle]) -> Action {
+        if self.ongoing_ops > MAX_OPS {
+            return Action::None;
+        }
         let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
         let current_price = history.first().expect("last candle").close;
         if current_price < (avg / (1.0 + GAIN_FACTOR)) {
@@ -35,12 +46,14 @@ impl SpotSinglePairStrategy for BuyDips {
             order.o_type = Type::Market;
             order.volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * GAIN_FACTOR / current_price;
             order.expire = None;
+            self.ongoing_ops += 1;
             return Action::NewOrder(order);
         }
         Action::None
     }
     fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action {
         if tx.side == Side::Sell {
+            self.ongoing_ops -= 1;
             return Action::None;
         }
         let price = tx.avg_price * (1.0 + GAIN_FACTOR);
