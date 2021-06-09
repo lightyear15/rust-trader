@@ -88,6 +88,7 @@ async fn main() {
         }
         Trade::Live {} => {
             for strat in settings.strategies {
+                println!("main - starting strategy {} on {}", strat.name, strat.symbol);
                 let exc_sett: ExchangeSettings = settings
                     .exchanges
                     .get(&strat.exchange)

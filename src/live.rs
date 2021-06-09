@@ -27,10 +27,13 @@ pub async fn run_live(
         let msg = feed.next().await;
         let action = match msg {
             LiveEvent::Candle(sym, candle) => {
-                buffer.pop_front();
-                buffer.push_back(candle);
-                println!("{} - {:?}", sym, buffer);
-                strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous())
+                if sym == strategy.symbol().symbol {
+                    buffer.pop_front();
+                    buffer.push_back(candle);
+                    strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous())
+                } else {
+                    Action::None
+                }
             }
             LiveEvent::ReconnectionRequired => {
                 println!("ReconnectionRequired");
@@ -40,15 +43,21 @@ pub async fn run_live(
                 Action::None
             }
             LiveEvent::Transaction(tx) => {
-                orders.retain(|ord| ord.id != tx.order.id);
-                tx_storage
-                    .store(strategy.exchange(), &tx)
-                    .await
-                    .expect("in storing new transaction");
-                strategy.on_new_transaction(orders.as_slice(), &tx)
+                if tx.symbol == strategy.symbol().symbol {
+                    orders.retain(|ord| ord.id != tx.order.id);
+                    tx_storage
+                        .store(strategy.exchange(), &tx)
+                        .await
+                        .expect("in storing new transaction");
+                    strategy.on_new_transaction(orders.as_slice(), &tx)
+                } else {
+                    Action::None
+                }
             }
             LiveEvent::NewOrder(order) => {
-                orders.push(order);
+                if order.symbol == strategy.symbol().symbol {
+                    orders.push(order);
+                }
                 Action::None
             }
             LiveEvent::Balance(spot_wallet) => {

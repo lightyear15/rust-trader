@@ -36,10 +36,14 @@ impl SpotSinglePairStrategy for BuyDips {
         if self.ongoing_ops > MAX_OPS {
             return Action::None;
         }
-        let avg = history.iter().fold(0.0, |a, b| a + b.low) / history.len() as f64;
+        let (total, volume) = history.iter().fold((0.0, 0.0), |(total, volume), b| {
+            let t = (b.low + b.high) / 2.0 * b.volume;
+            (total + t, volume  + b.volume)
+        }) ;
+        let avg = total / volume;
         let current_price = history.first().expect("last candle").close;
         if current_price < (avg / (1.0 + GAIN_FACTOR)) {
-            let mut order = Order::default();
+            let mut order = Order::new();
             order.exchange = self.exchange.clone();
             order.symbol = self.sym.symbol.clone();
             order.side = Side::Buy;
