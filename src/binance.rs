@@ -146,23 +146,20 @@ impl RestApi for Rest {
 
     async fn send_order(&self, order: orders::Order) -> orders::OrderStatus {
         let url = self.url.clone() + "/api/v3/order";
-        let order_request: NewOrder = order.into();
-        let body = serde_qs::to_string(&order_request).expect("in send_order to_string");
+        let mut queries = to_query(&order);
+        let mut request = self.client.post(url).query(&queries).expect("in adding queries");
+        let query_str = request.get_uri().query().expect("no query?");
         let signature = Signer::new(MessageDigest::sha256(), &self.secret)
             .expect("in creating the signer")
-            .sign_oneshot_to_vec(body.as_bytes())
+            .sign_oneshot_to_vec(query_str.as_bytes())
             .expect("in digesting body")
             .iter()
             .map(|b| format!("{:02x}", b))
             .collect::<Vec<_>>()
             .join("");
-        let request = self
-            .client
-            .post(url)
-            .query(&[("signature", signature.as_str()), ("newOrderResponseType", "ACK")])
-            .expect("in send_order adding signature")
-            .send_form(&body);
-        let resp_code = request.await.expect("in receiving server response").status();
+        queries.push((String::from("signature"), signature));
+        request = request.query(&queries).expect("in setting queries with signature");
+        let resp_code = request.send().await.expect("in receiving server response").status();
         if resp_code.is_success() {
             orders::OrderStatus::Accepted
         } else {
@@ -172,21 +169,20 @@ impl RestApi for Rest {
 
     async fn cancel_order(&self, symbol: String, order_id: u32) -> orders::OrderStatus {
         let url = self.url.clone() + "/api/v3/order";
-        let cancel = CancelOrder::new(symbol, order_id);
-        let body = serde_qs::to_string(&cancel).expect("in cancel_order to_string");
+        let mut queries = cancel_query(symbol, order_id);
+        let mut request = self.client.delete(url).query(&queries).expect("in adding queries");
+        let query_str = request.get_uri().query().expect("no query?");
         let signature = Signer::new(MessageDigest::sha256(), &self.secret)
             .expect("in creating the signer")
-            .sign_oneshot_to_vec(body.as_bytes())
+            .sign_oneshot_to_vec(query_str.as_bytes())
             .expect("in digesting body")
             .iter()
             .map(|b| format!("{:02x}", b))
             .collect::<Vec<_>>()
             .join("");
-        let request = self.client.delete(url)
-            .query(&[("signature", signature.as_str())])
-            .expect("in send_order adding signature")
-            .send_form(&body);
-        let resp_code = request.await.expect("in receiving server response").status();
+        queries.push((String::from("signature"), signature));
+        request = request.query(&queries).expect("in setting queries with signature");
+        let resp_code = request.send().await.expect("in receiving server response").status();
         if resp_code.is_success() {
             orders::OrderStatus::Canceled
         } else {
@@ -218,7 +214,7 @@ impl Live {
         println!("new response {:?}", resp);
         Self {
             ticks,
-            token : listen_key,
+            token: listen_key,
             url: base_url,
             ws_conn: conn,
         }
@@ -230,7 +226,7 @@ impl LiveFeed for Live {
     fn token(&self) -> String {
         self.token.clone()
     }
-    async fn reconnect(&mut self, new_key: String){
+    async fn reconnect(&mut self, new_key: String) {
         let stream_list = build_stream_list(self.ticks.as_slice(), &new_key);
         let url = self.url.clone() + &stream_list;
         let (resp, conn) = Client::builder()
@@ -445,27 +441,6 @@ struct LiveMessage {
     data: LiveMessageType,
 }
 
-#[derive(Debug, serde::Serialize)]
-struct NewOrder {
-    symbol: String,
-    side: Side,
-    #[serde(rename = "type")]
-    o_type: Type,
-    timestamp: u64,
-    #[serde(rename = "newClientOrderId")]
-    id: String,
-    price: Option<f64>,
-    quantity: f64,
-}
-
-#[derive(Debug, serde::Serialize)]
-struct CancelOrder {
-    symbol: String,
-    #[serde(rename = "origClientOderId")]
-    reference: String,
-    timestamp: u64,
-}
-
 // --------------------------------
 // helper functions
 fn to_interval(interval: &Duration) -> String {
@@ -555,8 +530,9 @@ impl From<LiveOrderUpdate> for Transaction {
                 expire: None,
                 side: msg.side.into(),
                 symbol: msg.symbol,
-                id: msg.order_id.parse::<u32>().expect("in msg.order_id"),
+                id: msg.order_id.parse::<u32>().unwrap_or(0),
                 o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
+                decimals : msg.order_quantity.split_once('.').expect("no decimals..").1.len(),
             },
         }
     }
@@ -615,37 +591,32 @@ impl From<orders::Side> for Side {
     }
 }
 
-impl From<orders::Order> for NewOrder {
-    fn from(order: orders::Order) -> Self {
-        match order.o_type {
-            orders::Type::Market => Self {
-                symbol: order.symbol,
-                side: order.side.into(),
-                o_type: Type::Market,
-                quantity: order.volume,
-                id: order.id.to_string(),
-                timestamp: Utc::now().timestamp_millis() as u64,
-                price: None,
-            },
-            orders::Type::Limit(price) => Self {
-                symbol: order.symbol,
-                side: order.side.into(),
-                o_type: Type::Limit,
-                quantity: order.volume,
-                id: order.id.to_string(),
-                timestamp: Utc::now().timestamp_millis() as u64,
-                price: Some(price),
-            },
+fn to_query(order: &orders::Order) -> Vec<(String, String)> {
+    let tstamp = Utc::now().timestamp_millis() as u64;
+    let mut queries: Vec<(String, String)> = vec![
+        (String::from("symbol"), order.symbol),
+        (String::from("side"), order.side.to_string()),
+        (String::from("quantity"), format!("{:.prec$}", order.volume, prec = order.decimals)),
+        (String::from("newClientOrderId"), order.id.to_string()),
+        (String::from("newOrderRespType"), String::from("ACK")),
+        (String::from("timestamp"), tstamp.to_string()),
+    ];
+    match order.o_type {
+        orders::Type::Market => {
+            queries.push((String::from("type"), String::from("MARKET")));
+        }
+        orders::Type::Limit(price) => {
+            queries.push((String::from("type"), String::from("LIMIT")));
+            (String::from("price"), format!("{:.prec$}", price, prec = order.decimals));
         }
     }
+    queries
 }
-
-impl CancelOrder {
-    fn new(symbol: String, order_id: u32) -> Self {
-        Self {
-            symbol,
-            reference : order_id.to_string(),
-            timestamp: Utc::now().timestamp_millis() as u64,
-        }
-    }
+fn cancel_query(symbol: String, id: u32) -> Vec<(String, String)> {
+    let tstamp = Utc::now().timestamp_millis() as u64;
+    vec![
+        (String::from("symbol"), symbol),
+        (String::from("origClientOrderId"), id.to_string()),
+        (String::from("timestamp"), tstamp.to_string()),
+    ]
 }

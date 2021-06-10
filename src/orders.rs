@@ -52,6 +52,7 @@ pub struct Order {
     pub volume: f64,
     pub expire: Option<chrono::NaiveDateTime>,
     pub id: u32,
+    pub decimals: usize,
 }
 impl Order {
     pub fn new() -> Self {
@@ -63,6 +64,7 @@ impl Order {
             volume: 0.0,
             expire: None,
             id: random(),
+            decimals: 0,
         }
     }
 }
