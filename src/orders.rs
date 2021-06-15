@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use rand::prelude::random;
+use crate::symbol::Symbol;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TimeInForce {
@@ -46,7 +47,7 @@ pub enum OrderStatus {
 #[derive(PartialEq, Clone, Debug)]
 pub struct Order {
     pub exchange: String,
-    pub symbol: String,
+    pub symbol: Symbol,
     pub side: Side,
     pub o_type: Type,
     pub volume: f64,
@@ -58,7 +59,7 @@ impl Order {
     pub fn new() -> Self {
         Self {
             exchange: String::new(),
-            symbol: String::new(),
+            symbol: Symbol::default(),
             side: Side::Buy,
             o_type: Type::Market,
             volume: 0.0,

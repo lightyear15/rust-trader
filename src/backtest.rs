@@ -131,7 +131,7 @@ fn is_expired(ord: &Order, last: &Candle) -> bool {
 
 async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Candles) -> Result<Transaction, Error> {
     let mut tx = Transaction {
-        symbol: ord.symbol.clone(),
+        symbol: ord.symbol.symbol.clone(),
         side: ord.side.clone(),
         order: ord.clone(),
         avg_price: last.open,
@@ -143,7 +143,7 @@ async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Can
         (Type::Market, _) => Ok(tx),
         (Type::Limit(buy_p), Side::Buy) => {
             let t = store
-                .find_lower(&ord.exchange, &ord.symbol, &last.tstamp, &end_t, *buy_p)
+                .find_lower(&ord.exchange, &ord.symbol.symbol, &last.tstamp, &end_t, *buy_p)
                 .await
                 .ok_or_else(|| Error::ErrNotFound(format!("can't find lower for {}", *buy_p)))?;
             tx.avg_price = *buy_p;
@@ -152,7 +152,7 @@ async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Can
         }
         (Type::Limit(sell_p), Side::Sell) => {
             let t = store
-                .find_higher(&ord.exchange, &ord.symbol, &last.tstamp, &end_t, *sell_p)
+                .find_higher(&ord.exchange, &ord.symbol.symbol, &last.tstamp, &end_t, *sell_p)
                 .await
                 .ok_or_else(|| Error::ErrNotFound(format!("can't find higher for {}", *sell_p)))?;
             tx.avg_price = *sell_p;

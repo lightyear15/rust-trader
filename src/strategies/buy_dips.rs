@@ -45,7 +45,7 @@ impl SpotSinglePairStrategy for BuyDips {
         if current_price < (avg / (1.0 + GAIN_FACTOR)) {
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
-            order.symbol = self.sym.symbol.clone();
+            order.symbol = self.sym.clone();
             order.side = Side::Buy;
             order.o_type = Type::Market;
             order.volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * GAIN_FACTOR / current_price;
@@ -64,7 +64,7 @@ impl SpotSinglePairStrategy for BuyDips {
         let volume = tx.volume / (1.0 + GAIN_FACTOR);
         let mut order = Order::default();
         order.exchange = self.exchange.clone();
-        order.symbol = self.sym.symbol.clone();
+        order.symbol = self.sym.clone();
         order.side = Side::Sell;
         order.o_type = Type::Limit(price);
         order.volume = volume;

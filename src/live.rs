@@ -3,6 +3,7 @@ use crate::orders::Order;
 use crate::storage;
 use crate::strategies::{Action, SpotSinglePairStrategy};
 use std::collections::VecDeque;
+use chrono::Utc;
 
 pub async fn run_live(
     mut strategy: Box<dyn SpotSinglePairStrategy>,
@@ -55,7 +56,7 @@ pub async fn run_live(
                 }
             }
             LiveEvent::NewOrder(order) => {
-                if order.symbol == strategy.symbol().symbol {
+                if order.symbol.symbol == strategy.symbol().symbol {
                     orders.push(order);
                 }
                 Action::None
@@ -69,6 +70,8 @@ pub async fn run_live(
                 Action::None
             }
         };
+
+        println!("new action @ {}", Utc::now());
 
         match action {
             Action::NewOrder(order) => {

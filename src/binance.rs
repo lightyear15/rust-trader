@@ -529,7 +529,7 @@ impl From<LiveOrderUpdate> for Transaction {
                 exchange: String::from("binance"),
                 expire: None,
                 side: msg.side.into(),
-                symbol: msg.symbol,
+                symbol: Symbol::new(msg.symbol),
                 id: msg.order_id.parse::<u32>().unwrap_or(0),
                 o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
                 decimals : msg.order_quantity.split_once('.').expect("no decimals..").1.len(),
@@ -594,7 +594,7 @@ impl From<orders::Side> for Side {
 fn to_query(order: &orders::Order) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
     let mut queries: Vec<(String, String)> = vec![
-        (String::from("symbol"), order.symbol),
+        (String::from("symbol"), order.symbol.symbol.clone()),
         (String::from("side"), order.side.to_string()),
         (String::from("quantity"), format!("{:.prec$}", order.volume, prec = order.decimals)),
         (String::from("newClientOrderId"), order.id.to_string()),
