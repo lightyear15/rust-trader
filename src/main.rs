@@ -79,7 +79,8 @@ async fn main() {
             let exc_sett = settings.exchanges.get(&exchange).expect("can't find the exchange in config");
             let drv = drivers::create_rest_client(&exchange, exc_sett).expect("no exchange driver");
             let sym_info = drv.get_symbol_info(&symbol).await.expect("no symbol info");
-            let strategy = strategies::create(&strategy, exchange, sym_info, cfg.time_frame).expect("strategies::create");
+            let strategy =
+                strategies::create(&strategy, exchange, sym_info, cfg.time_frame, cfg.settings.clone()).expect("strategies::create");
             let res = backtest_spot_singlepair(storage, strategy, start, end)
                 .await
                 .expect("backtest epic fail");
@@ -120,6 +121,7 @@ async fn run_live(strategy_settings: StrategySettings, exchange_settings: Exchan
         strategy_settings.exchange,
         sym_info,
         strategy_settings.time_frame,
+        strategy_settings.settings,
     )
     .expect("strategies::create");
     let mut cur_arbiter = actix_rt::Arbiter::current();

@@ -13,6 +13,7 @@ pub struct StrategySettings {
     pub symbol: String,
     #[serde(deserialize_with = "chrono_duration_de")]
     pub time_frame: chrono::Duration,
+    pub settings: HashMap<String,String>,
 }
 
 #[derive(Debug, serde::Deserialize)]

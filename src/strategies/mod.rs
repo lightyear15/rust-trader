@@ -35,10 +35,11 @@ pub fn create(
     exch: String,
     sym: Symbol,
     time_frame: chrono::Duration,
+    settings: HashMap<String, String>,
 ) -> Result<Box<dyn SpotSinglePairStrategy>, Error> {
     match strategy {
         "sample" => Ok(Box::new(Sample::new(exch, sym, time_frame))),
-        "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame))),
+        "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame, settings))),
         _ => Err(Error::ErrNotFound(format!("can't find strategy {}", strategy))),
     }
 }
