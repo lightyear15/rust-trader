@@ -217,16 +217,17 @@ pub struct Transactions {
 }
 
 /*
-create table transactions (
-exchange varchar(32) not null,
-symbol varchar(16) not null,
-tstamp timestamp not null,
-side varchar(16) not null,
-price float4 not null,
-volume float4 not null,
-reference int not null,
-constraint transactions_pkey primary key (exchange, symbol, tstamp, reference)
-)
+CREATE TABLE public.transactions (
+exchange varchar(32) NOT NULL,
+symbol varchar(16) NOT NULL,
+tstamp timestamp NOT NULL,
+side varchar(16) NOT NULL,
+price float4 NOT NULL,
+volume float4 NOT NULL,
+id int4 NOT NULL,
+reference int4 NULL,
+CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
+);
 */
 impl Transactions {
     pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
@@ -240,7 +241,7 @@ impl Transactions {
 
     pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
         let statement = format!(
-            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, reference)
+            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id)
                                 VALUES ('{}', '{}', '{}', '{}', {}, {}, {})",
             exchange,
             tx.symbol,
