@@ -159,11 +159,16 @@ impl RestApi for Rest {
             .join("");
         queries.push((String::from("signature"), signature));
         request = request.query(&queries).expect("in setting queries with signature");
-        let resp_code = request.send().await.expect("in receiving server response").status();
+        let mut response = request.send().await.expect("in receiving server response");
+        let resp_code = response.status();
         if resp_code.is_success() {
             orders::OrderStatus::Accepted
         } else {
-            orders::OrderStatus::Rejected
+            let bd = response
+                .body()
+                .await
+                .map_or_else(|err| format!("Error {:?}", err), |body| format!("body {:?}", body));
+            orders::OrderStatus::Rejected(bd)
         }
     }
 
@@ -186,7 +191,7 @@ impl RestApi for Rest {
         if resp_code.is_success() {
             orders::OrderStatus::Canceled
         } else {
-            orders::OrderStatus::Rejected
+            orders::OrderStatus::Rejected(String::new())
         }
     }
 }
@@ -514,6 +519,14 @@ impl From<Side> for orders::Side {
         }
     }
 }
+impl ToString for Side {
+    fn to_string(&self) -> String {
+        match self {
+            Side::Sell => String::from("SELL"),
+            Side::Buy => String::from("BUY"),
+        }
+    }
+}
 impl From<LiveOrderUpdate> for Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
@@ -532,7 +545,6 @@ impl From<LiveOrderUpdate> for Transaction {
                 symbol: Symbol::new(msg.symbol),
                 id: msg.order_id.parse::<u32>().unwrap_or(0),
                 o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
-                decimals : msg.order_quantity.split_once('.').expect("no decimals..").1.len(),
             },
         }
     }
@@ -593,10 +605,11 @@ impl From<orders::Side> for Side {
 
 fn to_query(order: &orders::Order) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
+    let side : Side = order.side.clone().into();
     let mut queries: Vec<(String, String)> = vec![
         (String::from("symbol"), order.symbol.symbol.clone()),
-        (String::from("side"), order.side.to_string()),
-        (String::from("quantity"), format!("{:.prec$}", order.volume, prec = order.decimals)),
+        (String::from("side"), side.to_string()),
+        (String::from("quantity"), format!("{:.prec$}", order.volume, prec = order.symbol.base_decimals)),
         (String::from("newClientOrderId"), order.id.to_string()),
         (String::from("newOrderRespType"), String::from("ACK")),
         (String::from("timestamp"), tstamp.to_string()),
@@ -607,7 +620,7 @@ fn to_query(order: &orders::Order) -> Vec<(String, String)> {
         }
         orders::Type::Limit(price) => {
             queries.push((String::from("type"), String::from("LIMIT")));
-            (String::from("price"), format!("{:.prec$}", price, prec = order.decimals));
+            (String::from("price"), format!("{:.prec$}", price, prec = order.symbol.base_decimals));
         }
     }
     queries
