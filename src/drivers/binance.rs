@@ -16,6 +16,8 @@ use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use std::collections::HashMap;
 
+use super::binance_types::*;
+
 #[derive(Clone)]
 pub struct Rest {
     url: String,
@@ -98,12 +100,7 @@ impl RestApi for Rest {
         queries.push((String::from("interval"), to_interval(interval.unwrap_or(&Duration::minutes(1)))));
         queries.push((String::from("limit"), limit.unwrap_or(1000).to_string()));
         let url = self.url.clone() + "/api/v3/klines";
-        let request = self
-            .client
-            .get(url)
-            //.set_header("X-MBX-APIKEY", self.api_key.as_str())
-            .query(&queries)
-            .expect("in adding queries");
+        let request = self.client.get(url).query(&queries).expect("in adding queries");
         let mut response = request.send().await.expect("in send binance klines request");
         response
             .json::<Vec<Candle>>()
@@ -278,49 +275,8 @@ impl LiveFeed for Live {
 //---------------------------------
 // binance messages and objects
 #[derive(Debug, serde::Deserialize, Clone)]
-struct SymbolInfo {
-    symbol: String,
-    #[serde(alias = "baseAsset")]
-    base: String,
-    #[serde(alias = "baseAssetPrecision")]
-    base_precision: usize,
-    #[serde(alias = "quoteAsset")]
-    quote: String,
-    #[serde(alias = "quoteAssetPrecision")]
-    quote_precision: usize,
-}
-#[derive(Debug, serde::Deserialize, Clone)]
 struct ExchangeInfo {
     symbols: Vec<SymbolInfo>,
-}
-#[derive(Debug, serde::Deserialize)]
-struct Candle {
-    #[serde(alias = "t")]
-    tstamp_open: u64,
-    #[serde(alias = "o")]
-    open: String,
-    #[serde(alias = "h")]
-    high: String,
-    #[serde(alias = "l")]
-    low: String,
-    #[serde(alias = "c")]
-    close: String,
-    #[serde(alias = "v")]
-    volume: String,
-    #[serde(alias = "T")]
-    tstamp_close: u64,
-    #[serde(alias = "q")]
-    quote_asset_volume: String,
-    #[serde(alias = "n")]
-    number_of_trades: u32,
-    #[serde(default)]
-    ignore1: String,
-    #[serde(default)]
-    ignore2: String,
-    #[serde(default)]
-    ignore3: String,
-    #[serde(alias = "x", default)]
-    kline_close: bool,
 }
 #[derive(Debug, serde::Deserialize, Clone)]
 struct ListenKey {
@@ -347,15 +303,6 @@ struct AccountStatus {
     code: i16,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct LiveCandleMsg {
-    #[serde(alias = "E")]
-    tstamp_open: u64,
-    #[serde(alias = "s")]
-    symbol: String,
-    #[serde(alias = "k")]
-    candle: Candle,
-}
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum Side {
     #[serde(alias = "BUY")]
@@ -469,48 +416,6 @@ fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     streams.join("/")
 }
 
-impl From<SymbolInfo> for Symbol {
-    fn from(info: SymbolInfo) -> Self {
-        Self {
-            pretty: format!("{}-{}", &info.base, &info.quote),
-            symbol: info.symbol,
-            base: info.base,
-            base_decimals: info.base_precision,
-            quote: info.quote,
-            quote_decimals: info.quote_precision,
-        }
-    }
-}
-
-impl From<Candle> for candles::Candle {
-    fn from(cnd: Candle) -> Self {
-        Self {
-            open: cnd.open.parse::<f64>().expect("in cnd.open"),
-            low: cnd.low.parse::<f64>().expect("in cnd.low"),
-            high: cnd.high.parse::<f64>().expect("in cnd.high"),
-            close: cnd.close.parse::<f64>().expect("in cnd.close"),
-            volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
-            tstamp: NaiveDateTime::from_timestamp((cnd.tstamp_open / 1000) as i64, 0),
-            tframe: Duration::milliseconds((cnd.tstamp_close - cnd.tstamp_open) as i64 + 1),
-        }
-    }
-}
-impl From<LiveCandleMsg> for candles::Candle {
-    fn from(msg: LiveCandleMsg) -> Self {
-        let start = NaiveDateTime::from_timestamp((msg.candle.tstamp_open / 1000) as i64, 0);
-        let stop = NaiveDateTime::from_timestamp((msg.candle.tstamp_close / 1000) as i64, 0);
-        let dur = stop - start + Duration::milliseconds(1);
-        Self {
-            open: msg.candle.open.parse::<f64>().expect("in cnd.open"),
-            low: msg.candle.low.parse::<f64>().expect("in cnd.low"),
-            high: msg.candle.high.parse::<f64>().expect("in cnd.high"),
-            close: msg.candle.close.parse::<f64>().expect("in cnd.close"),
-            volume: msg.candle.volume.parse::<f64>().expect("in cnd.volume"),
-            tstamp: start,
-            tframe: dur,
-        }
-    }
-}
 impl From<Side> for orders::Side {
     fn from(side: Side) -> Self {
         match side {
@@ -570,8 +475,8 @@ fn to_type(msg_o_type: &Type, o_price: f64) -> orders::Type {
 fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
     match mesg.data {
         LiveMessageType::LiveCandle(candle_msg) => {
-            if candle_msg.candle.kline_close {
-                let symbol_name = candle_msg.symbol.clone();
+            if candle_msg.is_closed() {
+                let symbol_name = candle_msg.name();
                 return Some(LiveEvent::Candle(symbol_name, candle_msg.into()));
             }
         }
@@ -605,11 +510,19 @@ impl From<orders::Side> for Side {
 
 fn to_query(order: &orders::Order) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
-    let side : Side = order.side.clone().into();
+    let side: Side = order.side.clone().into();
+    let mut qty = order.symbol.min_size.max(order.volume);
+    if order.symbol.step_size != 0.0 {
+        let mult = ((qty - order.symbol.min_size) / order.symbol.step_size) as i32;
+        qty = mult as f64 * order.symbol.step_size + order.symbol.min_size;
+    }
     let mut queries: Vec<(String, String)> = vec![
         (String::from("symbol"), order.symbol.symbol.clone()),
         (String::from("side"), side.to_string()),
-        (String::from("quantity"), format!("{:.prec$}", order.volume, prec = order.symbol.base_decimals)),
+        (
+            String::from("quantity"),
+            format!("{:.prec$}", qty, prec = order.symbol.base_decimals),
+        ),
         (String::from("newClientOrderId"), order.id.to_string()),
         (String::from("newOrderRespType"), String::from("ACK")),
         (String::from("timestamp"), tstamp.to_string()),
@@ -620,7 +533,10 @@ fn to_query(order: &orders::Order) -> Vec<(String, String)> {
         }
         orders::Type::Limit(price) => {
             queries.push((String::from("type"), String::from("LIMIT")));
-            (String::from("price"), format!("{:.prec$}", price, prec = order.symbol.base_decimals));
+            (
+                String::from("price"),
+                format!("{:.prec$}", price, prec = order.symbol.base_decimals),
+            );
         }
     }
     queries

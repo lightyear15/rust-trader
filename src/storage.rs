@@ -240,7 +240,7 @@ impl Transactions {
 
     pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
         let statement = format!(
-            "INSERTO INTO transactions (exchange, symbol, tstamp, side, price, volume, reference)
+            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, reference)
                                 VALUES ('{}', '{}', '{}', '{}', {}, {}, {})",
             exchange,
             tx.symbol,

@@ -1,11 +1,14 @@
 use crate::configuration::ExchangeSettings;
 use crate::error::Error;
 use crate::symbol::Symbol;
-use crate::{binance, candles, orders, wallets};
+use crate::{candles, orders, wallets};
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use crate::orders::{Order, Transaction, OrderStatus};
 use std::vec::Vec;
+
+pub mod binance;
+pub mod binance_types;
 
 #[async_trait(?Send)]
 pub trait RestApi {

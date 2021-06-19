@@ -3,9 +3,11 @@ pub struct Symbol {
     pub symbol: String,
     pub pretty: String,
     pub base: String,
-    pub base_decimals: usize,
     pub quote: String,
+    pub base_decimals: usize,
     pub quote_decimals: usize,
+    pub min_size: f64, // as multiple of 10^-base_decimals
+    pub step_size : f64, // as multiple of 10^-base_decimals
 }
 
 impl Symbol {
@@ -17,6 +19,8 @@ impl Symbol {
             base_decimals: 0,
             quote: String::new(),
             quote_decimals: 0,
+            min_size: 0.0,
+            step_size: 0.0,
         }
     }
 }
@@ -29,14 +33,7 @@ impl std::string::ToString for Symbol {
 
 impl Default for Symbol {
     fn default() -> Self {
-        Self {
-            symbol: String::new(),
-            pretty: String::new(),
-            base: String::new(),
-            base_decimals: 0,
-            quote: String::new(),
-            quote_decimals: 0,
-        }
+        Self::new(String::new())
     }
 }
 

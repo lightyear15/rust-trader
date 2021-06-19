@@ -7,7 +7,6 @@ use std::pin::Pin;
 use structopt::StructOpt;
 
 mod backtest;
-mod binance;
 mod candles;
 mod configuration;
 mod drivers;
