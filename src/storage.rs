@@ -224,8 +224,8 @@ tstamp timestamp NOT NULL,
 side varchar(16) NOT NULL,
 price float4 NOT NULL,
 volume float4 NOT NULL,
-id int4 NOT NULL,
-reference int4 NULL,
+id bigint NOT NULL,
+reference bigint NULL,
 CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
 );
 */
