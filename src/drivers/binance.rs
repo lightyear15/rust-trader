@@ -533,10 +533,11 @@ fn to_query(order: &orders::Order) -> Vec<(String, String)> {
         }
         orders::Type::Limit(price) => {
             queries.push((String::from("type"), String::from("LIMIT")));
-            (
+            queries.push((
                 String::from("price"),
                 format!("{:.prec$}", price, prec = order.symbol.base_decimals),
-            );
+            ));
+            queries.push((String::from("timeInForce"), String::from("GTC")))
         }
     }
     queries
