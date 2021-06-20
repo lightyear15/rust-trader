@@ -1,5 +1,6 @@
 use crate::candles;
 use crate::symbol::Symbol;
+use crate::orders;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -23,6 +24,15 @@ enum SymbolFilter {
         #[serde(alias = "stepSize")]
         step_size: String,
     },
+    #[serde(alias = "PRICE_FILTER")]
+    PriceFilter {
+        #[serde(alias = "minPrice")]
+        min_price: String,
+        #[serde(alias = "maxPrice")]
+        max_price: String,
+        #[serde(alias = "tickSize")]
+        tick_price: String,
+    },
     #[serde(other)]
     Other,
 }
@@ -42,21 +52,31 @@ pub(super) struct SymbolInfo {
 }
 impl From<SymbolInfo> for Symbol {
     fn from(info: SymbolInfo) -> Self {
-        let (min, step) = info
-            .filters
-            .iter()
-            .find_map(|filter| match filter {
+        let mut min_volume : f64 = 0.0;
+        let mut price_min : f64 = 0.0;
+        let mut volume_step : f64 = 0.0;
+        let mut price_tick : f64 = 0.0;
+        for filter in info.filters {
+            match filter {
                 SymbolFilter::LotSize {
                     min_qty,
-                    max_qty,
+                    max_qty: _,
                     step_size,
-                } => Some((
-                    min_qty.parse::<f64>().expect("min_qty not an f64"),
-                    step_size.parse::<f64>().expect("step size not an f64"),
-                )),
-                _ => None,
-            })
-            .unwrap_or((0.0, 0.0));
+                } => {
+                    min_volume = min_qty.parse::<f64>().expect("min_qty not an f64");
+                    volume_step = step_size.parse::<f64>().expect("step size not an f64");
+                },
+                SymbolFilter::PriceFilter {
+                    min_price,
+                    max_price: _,
+                    tick_price,
+                } => {
+                    price_min = min_price.parse::<f64>().expect("min_price not an f64");
+                    price_tick = tick_price.parse::<f64>().expect("price tick not an f64");
+                },
+                _ => {},
+            }
+        }
 
         Self {
             pretty: format!("{}-{}", &info.base, &info.quote),
@@ -65,8 +85,10 @@ impl From<SymbolInfo> for Symbol {
             base_decimals: info.base_precision,
             quote: info.quote,
             quote_decimals: info.quote_precision,
-            min_size: min,
-            step_size: step,
+            min_volume,
+            min_price: price_min,
+            volume_step,
+            price_tick,
         }
     }
 }
@@ -144,6 +166,40 @@ impl From<LiveCandleMsg> for candles::Candle {
             volume: msg.candle.volume.parse::<f64>().expect("in cnd.volume"),
             tstamp: start,
             tframe: dur,
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum Side {
+    #[serde(alias = "BUY")]
+    Buy,
+    #[serde(alias = "SELL")]
+    Sell,
+}
+impl From<Side> for orders::Side {
+    fn from(side: Side) -> Self {
+        match side {
+            Side::Buy => orders::Side::Buy,
+            Side::Sell => orders::Side::Sell,
+        }
+    }
+}
+impl From<orders::Side> for Side {
+    fn from(side: orders::Side) -> Self {
+        match side {
+            orders::Side::Buy => Side::Buy,
+            orders::Side::Sell => Side::Sell,
+        }
+    }
+}
+
+impl ToString for Side {
+    fn to_string(&self) -> String {
+        match self {
+            Side::Sell => String::from("SELL"),
+            Side::Buy => String::from("BUY"),
         }
     }
 }

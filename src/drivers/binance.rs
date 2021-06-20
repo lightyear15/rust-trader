@@ -143,7 +143,7 @@ impl RestApi for Rest {
 
     async fn send_order(&self, order: orders::Order) -> orders::OrderStatus {
         let url = self.url.clone() + "/api/v3/order";
-        let mut queries = to_query(&order);
+        let mut queries = order_to_query(&order);
         let mut request = self.client.post(url).query(&queries).expect("in adding queries");
         let query_str = request.get_uri().query().expect("no query?");
         let signature = Signer::new(MessageDigest::sha256(), &self.secret)
@@ -304,13 +304,6 @@ struct AccountStatus {
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub enum Side {
-    #[serde(alias = "BUY")]
-    Buy,
-    #[serde(alias = "SELL")]
-    Sell,
-}
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum Type {
     #[serde(alias = "MARKET")]
     Market,
@@ -416,22 +409,6 @@ fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     streams.join("/")
 }
 
-impl From<Side> for orders::Side {
-    fn from(side: Side) -> Self {
-        match side {
-            Side::Buy => orders::Side::Buy,
-            Side::Sell => orders::Side::Sell,
-        }
-    }
-}
-impl ToString for Side {
-    fn to_string(&self) -> String {
-        match self {
-            Side::Sell => String::from("SELL"),
-            Side::Buy => String::from("BUY"),
-        }
-    }
-}
 impl From<LiveOrderUpdate> for Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
@@ -499,23 +476,10 @@ fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
     None
 }
 
-impl From<orders::Side> for Side {
-    fn from(side: orders::Side) -> Self {
-        match side {
-            orders::Side::Buy => Side::Buy,
-            orders::Side::Sell => Side::Sell,
-        }
-    }
-}
-
-fn to_query(order: &orders::Order) -> Vec<(String, String)> {
+fn order_to_query(order: &orders::Order) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
     let side: Side = order.side.clone().into();
-    let mut qty = order.symbol.min_size.max(order.volume);
-    if order.symbol.step_size != 0.0 {
-        let mult = ((qty - order.symbol.min_size) / order.symbol.step_size) as i32;
-        qty = mult as f64 * order.symbol.step_size + order.symbol.min_size;
-    }
+    let qty = normalize_it(order.volume, order.symbol.min_volume, order.symbol.volume_step);
     let mut queries: Vec<(String, String)> = vec![
         (String::from("symbol"), order.symbol.symbol.clone()),
         (String::from("side"), side.to_string()),
@@ -532,10 +496,11 @@ fn to_query(order: &orders::Order) -> Vec<(String, String)> {
             queries.push((String::from("type"), String::from("MARKET")));
         }
         orders::Type::Limit(price) => {
+            let norm_pr = normalize_it(price, order.symbol.min_price, order.symbol.price_tick);
             queries.push((String::from("type"), String::from("LIMIT")));
             queries.push((
                 String::from("price"),
-                format!("{:.prec$}", price, prec = order.symbol.base_decimals),
+                format!("{:.prec$}", norm_pr, prec = order.symbol.base_decimals),
             ));
             queries.push((String::from("timeInForce"), String::from("GTC")))
         }
@@ -549,4 +514,13 @@ fn cancel_query(symbol: String, id: u32) -> Vec<(String, String)> {
         (String::from("origClientOrderId"), id.to_string()),
         (String::from("timestamp"), tstamp.to_string()),
     ]
+}
+
+fn normalize_it(value: f64, min: f64, tick: f64) -> f64 {
+    let mut norm = min.max(value);
+    if tick != 0.0 {
+        let mult = ((norm - min) / tick) as i32;
+        norm = mult as f64 * tick + min;
+    }
+    norm
 }

@@ -6,8 +6,10 @@ pub struct Symbol {
     pub quote: String,
     pub base_decimals: usize,
     pub quote_decimals: usize,
-    pub min_size: f64, // as multiple of 10^-base_decimals
-    pub step_size : f64, // as multiple of 10^-base_decimals
+    pub min_volume: f64,
+    pub volume_step: f64,
+    pub min_price: f64,
+    pub price_tick: f64,
 }
 
 impl Symbol {
@@ -19,8 +21,10 @@ impl Symbol {
             base_decimals: 0,
             quote: String::new(),
             quote_decimals: 0,
-            min_size: 0.0,
-            step_size: 0.0,
+            min_volume: 0.0,
+            volume_step: 0.0,
+            min_price: 0.0,
+            price_tick: 0.0,
         }
     }
 }
@@ -36,4 +40,3 @@ impl Default for Symbol {
         Self::new(String::new())
     }
 }
-
