@@ -87,6 +87,7 @@ async fn main() {
             println!("Backtest final wallet{:?}", res.1);
         }
         Trade::Live {} => {
+            log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
             for strat in settings.strategies {
                 println!("main - starting strategy {} on {}", strat.name, strat.symbol);
                 let exc_sett: ExchangeSettings = settings

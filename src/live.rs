@@ -2,8 +2,9 @@ use crate::drivers::{LiveEvent, LiveFeed, RestApi};
 use crate::orders::Order;
 use crate::storage;
 use crate::strategies::{Action, SpotSinglePairStrategy};
-use std::collections::VecDeque;
 use chrono::Utc;
+use log::{warn, debug, info};
+use std::collections::VecDeque;
 
 pub async fn run_live(
     mut strategy: Box<dyn SpotSinglePairStrategy>,
@@ -11,8 +12,7 @@ pub async fn run_live(
     mut feed: Box<dyn LiveFeed>,
     tx_storage: storage::Transactions,
 ) {
-    println!("starting strategy {}", strategy.name());
-    println!("on symbol {:?}", strategy.symbol());
+    info!("starting strategy {} on symbol {:?}", strategy.name(), strategy.symbol());
     let hist_size = strategy.get_candles_history_size();
     rest.get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
         .await;
@@ -28,6 +28,7 @@ pub async fn run_live(
         let msg = feed.next().await;
         let action = match msg {
             LiveEvent::Candle(sym, candle) => {
+                debug!("new candle event at {}", Utc::now());
                 if sym == strategy.symbol().symbol {
                     buffer.pop_front();
                     buffer.push_back(candle);
@@ -37,13 +38,14 @@ pub async fn run_live(
                 }
             }
             LiveEvent::ReconnectionRequired => {
-                println!("ReconnectionRequired");
+                info!("ReconnectionRequired");
                 let old_token = feed.token();
                 let new_token = rest.refresh_ws_token(Some(old_token)).await;
                 feed.reconnect(new_token).await;
                 Action::None
             }
             LiveEvent::Transaction(tx) => {
+                debug!("new transaction event at {}\n\t {:?}", Utc::now(), tx);
                 if tx.symbol == strategy.symbol().symbol {
                     orders.retain(|ord| ord.id != tx.order.id);
                     tx_storage
@@ -56,36 +58,32 @@ pub async fn run_live(
                 }
             }
             LiveEvent::NewOrder(order) => {
+                debug!("new order event at {}\n\t {:?}", Utc::now(), order);
                 if order.symbol.symbol == strategy.symbol().symbol {
                     orders.push(order);
                 }
                 Action::None
             }
             LiveEvent::Balance(spot_wallet) => {
+                debug!("new balance event at {}", Utc::now());
                 wallet = spot_wallet;
                 Action::None
             }
             _ => {
-                println!("unkown event");
+                warn!("unkown event");
                 Action::None
             }
         };
 
-        println!("new action @ {}", Utc::now());
 
         match action {
             Action::NewOrder(order) => {
-                println!("received a new order action {:?}", order);
                 let status = rest.send_order(order).await;
-                println!("order status {:?}", status);
             }
             Action::CancelOrder(id) => {
-                println!("received a cancel order action {:?}", id);
                 let status = rest.cancel_order(strategy.symbol().symbol.clone(), id).await;
-                println!("cancel order status {:?}", status);
             }
             Action::None => {
-                println!("action of doing nothing");
             }
         }
     }

@@ -1,0 +1,6 @@
+appenders:
+    main:
+        kind: file
+        path: ./trader.log
+        append: false
+

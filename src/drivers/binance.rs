@@ -15,6 +15,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use std::collections::HashMap;
+use log::{warn, debug, info};
 
 use super::binance_types::*;
 
@@ -213,7 +214,7 @@ impl Live {
             .connect()
             .await
             .expect("on ws connecting to binance");
-        println!("new response {:?}", resp);
+        debug!("new response {:?}", resp);
         Self {
             ticks,
             token: listen_key,
@@ -239,7 +240,7 @@ impl LiveFeed for Live {
             .await
             .expect("on ws connecting to binance");
         self.ws_conn = conn;
-        println!("new response {:?}", resp);
+        debug!("new response {:?}", resp);
         self.token = new_key;
     }
 
@@ -263,7 +264,7 @@ impl LiveFeed for Live {
                     self.ws_conn.send(awc::ws::Message::Pong(bytes)).await.expect("when ponging");
                 }
                 Frame::Close(reasons) => {
-                    println!("connection closed {:?}", reasons);
+                    warn!("connection closed {:?}", reasons);
                     return LiveEvent::ReconnectionRequired;
                 }
                 _ => {}
