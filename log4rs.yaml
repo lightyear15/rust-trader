@@ -4,3 +4,11 @@ appenders:
         path: ./trader.log
         append: false
 
+root:
+    level: info
+    appenders:
+        - main
+
+loggers:
+    trader:
+        level: debug

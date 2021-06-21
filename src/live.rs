@@ -3,7 +3,7 @@ use crate::orders::Order;
 use crate::storage;
 use crate::strategies::{Action, SpotSinglePairStrategy};
 use chrono::Utc;
-use log::{warn, debug, info};
+use log::{debug, info, warn};
 use std::collections::VecDeque;
 
 pub async fn run_live(
@@ -28,8 +28,8 @@ pub async fn run_live(
         let msg = feed.next().await;
         let action = match msg {
             LiveEvent::Candle(sym, candle) => {
-                debug!("new candle event at {}", Utc::now());
                 if sym == strategy.symbol().symbol {
+                    debug!("new candle event at {}", Utc::now());
                     buffer.pop_front();
                     buffer.push_back(candle);
                     strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous())
@@ -45,8 +45,8 @@ pub async fn run_live(
                 Action::None
             }
             LiveEvent::Transaction(tx) => {
-                debug!("new transaction event at {}\n\t {:?}", Utc::now(), tx);
                 if tx.symbol == strategy.symbol().symbol {
+                    debug!("new transaction event at {}\n\t {:?}", Utc::now(), tx);
                     orders.retain(|ord| ord.id != tx.order.id);
                     tx_storage
                         .store(strategy.exchange(), &tx)
@@ -58,8 +58,8 @@ pub async fn run_live(
                 }
             }
             LiveEvent::NewOrder(order) => {
-                debug!("new order event at {}\n\t {:?}", Utc::now(), order);
                 if order.symbol.symbol == strategy.symbol().symbol {
+                    debug!("new order event at {}\n\t {:?}", Utc::now(), order);
                     orders.push(order);
                 }
                 Action::None
@@ -75,16 +75,16 @@ pub async fn run_live(
             }
         };
 
-
         match action {
             Action::NewOrder(order) => {
                 let status = rest.send_order(order).await;
+                debug!("new order sent {:?}", status);
             }
             Action::CancelOrder(id) => {
                 let status = rest.cancel_order(strategy.symbol().symbol.clone(), id).await;
+                debug!("new cancel order sent {:?}", status);
             }
-            Action::None => {
-            }
+            Action::None => {}
         }
     }
 }
