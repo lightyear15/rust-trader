@@ -7,8 +7,10 @@ use std::collections::HashMap;
 
 pub mod buy_dips;
 pub mod sample;
+pub mod macd1;
 pub use buy_dips::BuyDips;
 pub use sample::Sample;
+pub use macd1::Macd1;
 
 #[derive(Debug)]
 pub enum Action {

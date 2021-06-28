@@ -78,7 +78,7 @@ impl SpotSinglePairStrategy for BuyDips {
         }
         let price = tx.avg_price * (1.0 + self.gain_factor);
         let volume = tx.volume / (1.0 + self.gain_factor);
-        let mut order = Order::default();
+        let mut order = Order::new();
         order.exchange = self.exchange.clone();
         order.symbol = self.sym.clone();
         order.side = Side::Sell;
