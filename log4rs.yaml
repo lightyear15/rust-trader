@@ -12,3 +12,6 @@ root:
 loggers:
     trader:
         level: debug
+    trader::drivers::binance:
+        level: info
+

@@ -6,16 +6,18 @@ use crate::orders::Transaction;
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
 use async_trait::async_trait;
+use awc::ws::Message;
 use awc::ws::{Codec, Frame};
 use awc::{BoxedSocket, Client};
+use bytes::Bytes;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
+use log::{debug, info, warn};
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use std::collections::HashMap;
-use log::{warn, debug, info};
 
 use super::binance_types::*;
 
@@ -195,11 +197,13 @@ impl RestApi for Rest {
 }
 
 type WsConnection = actix_codec::Framed<BoxedSocket, Codec>;
+
 pub struct Live {
     ticks: Vec<Tick>,
     token: String,
     url: String,
     ws_conn: WsConnection,
+    hb: chrono::NaiveDateTime,
 }
 
 impl Live {
@@ -220,6 +224,7 @@ impl Live {
             token: listen_key,
             url: base_url,
             ws_conn: conn,
+            hb: Utc::now().naive_utc(),
         }
     }
 }
@@ -245,8 +250,14 @@ impl LiveFeed for Live {
     }
 
     async fn next(&mut self) -> LiveEvent {
+        let keep_alive: Duration = Duration::minutes(30);
         loop {
+            if Utc::now().naive_utc() - self.hb > keep_alive {
+                self.ws_conn.send(Message::Ping(Bytes::from("hello"))).await.expect("in sending ping");
+                self.hb = Utc::now().naive_utc();
+            }
             let nnext = self.ws_conn.next().await;
+            debug!("[{}] received a next {:?}", Utc::now(), nnext);
             if nnext.is_none() {
                 return LiveEvent::ReconnectionRequired;
             }

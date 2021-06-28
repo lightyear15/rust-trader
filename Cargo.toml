@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = {version = "0.5"}
 log = {version = "0.4"}
 log4rs = {version = "1"}
 config = {version = "0.11"}
@@ -26,7 +27,7 @@ actix-rt = {version = "1.1"}
 actix-codec = {version = "0.3"}
 actix = {version = "0.10"}
 actix-web-actors = {version = "3"}
-awc = {version = "2.0", features = ["openssl"]}
+awc = {version = "2", features = ["openssl"]}
 openssl = {version = "0.10", features = ["vendored"]}
 openssl-sys = {version = "0.9"}
 openssl-probe = {version = "0.1"}

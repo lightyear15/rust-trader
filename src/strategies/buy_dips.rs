@@ -49,7 +49,7 @@ impl SpotSinglePairStrategy for BuyDips {
         format!("BuyDips-{}-{}-{}", self.exchange, self.sym.to_string(), self.time_frame.to_string())
     }
     fn on_new_candle(&mut self, wallet: &SpotWallet, _outstanding_orders: &[Order], history: &[Candle]) -> Action {
-        if self.ongoing_ops > self.max_ops {
+        if self.ongoing_ops >= self.max_ops {
             return Action::None;
         }
         let (total, volume) = history.iter().fold((0.0, 0.0), |(total, volume), b| {
