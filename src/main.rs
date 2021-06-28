@@ -17,6 +17,7 @@ mod orders;
 mod storage;
 mod strategies;
 mod symbol;
+mod ta_lib;
 mod utils;
 mod wallets;
 use crate::backtest::backtest_spot_singlepair;

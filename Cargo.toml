@@ -32,7 +32,3 @@ openssl = {version = "0.10", features = ["vendored"]}
 openssl-sys = {version = "0.9"}
 openssl-probe = {version = "0.1"}
 progress = {version = "0.2.0"}
-
-[build-dependencies]
-cc = { version = "1", features = ["parallel"] }
-bindgen = {version = "0.58"}
