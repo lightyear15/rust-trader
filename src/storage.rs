@@ -19,7 +19,7 @@ high float4 NULL,
 volume float4 NULL,
 CONSTRAINT binance_pkey PRIMARY KEY (symbol, tstamp)
 );
- */
+*/
 impl Candles {
     pub async fn new(host: &str) -> Self {
         let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
@@ -42,6 +42,20 @@ impl Candles {
         value_statements.remove(0);
         let statement = format!("{} {} ON CONFLICT(symbol, tstamp) DO NOTHING;", insert_statement, &value_statements);
         self.client.execute(statement.as_str(), &[]).await
+    }
+
+    pub async fn check(&self, exc: &str, sym: &str, start: &NaiveDateTime, end: &NaiveDateTime) -> usize {
+        let statement = format!(
+            "SELECT COUNT(*) AS counter
+            FROM {exchange}
+            WHERE symbol = '{symbol}' AND tstamp BETWEEN '{start}' AND '{end}'",
+            exchange = exc,
+            symbol = sym,
+            start = start.format("%Y-%m-%d %H:%M:%S"),
+            end = end.format("%Y-%m-%d %H:%M:%S"),
+        );
+        let res = self.client.query_one(statement.as_str(), &[]).await.expect("no returned value");
+        res.get::<usize, i64>(0) as usize
     }
 
     pub async fn get(
@@ -119,13 +133,19 @@ impl Candles {
         end: &NaiveDateTime,
         price: f64,
     ) -> Option<chrono::NaiveDateTime> {
-        let statement = format!("SELECT tstamp FROM {exchange} WHERE symbol = '{symbol}' AND low <= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}' ORDER BY tstamp LIMIT 1",
-                                exchange = exc,
-                                symbol = sym,
-                                start_time = start.format("%Y-%m-%d %H:%M:%S"),
-                                end_time = end.format("%Y-%m-%d %H:%M:%S"),
-                                price = price
-                               );
+        let statement = format!(
+            "SELECT tstamp 
+            FROM {exchange} 
+            WHERE symbol = '{symbol}' 
+                AND low <= {price} 
+                AND tstamp BETWEEN '{start_time}' AND '{end_time}' 
+            ORDER BY tstamp LIMIT 1",
+            exchange = exc,
+            symbol = sym,
+            start_time = start.format("%Y-%m-%d %H:%M:%S"),
+            end_time = end.format("%Y-%m-%d %H:%M:%S"),
+            price = price
+        );
         self.client
             .query(statement.as_str(), &[])
             .await
@@ -142,13 +162,19 @@ impl Candles {
         end: &NaiveDateTime,
         price: f64,
     ) -> Option<chrono::NaiveDateTime> {
-        let statement = format!("SELECT tstamp FROM {exchange} WHERE symbol = '{symbol}' AND high >= {price} AND tstamp BETWEEN '{start_time}' AND '{end_time}' ORDER BY tstamp LIMIT 1",
-                                exchange = exc,
-                                symbol = sym,
-                                start_time = start.format("%Y-%m-%d %H:%M:%S"),
-                                end_time = end.format("%Y-%m-%d %H:%M:%S"),
-                                price = price
-                               );
+        let statement = format!(
+            "SELECT tstamp 
+            FROM {exchange} 
+            WHERE symbol = '{symbol}' 
+                AND high >= {price} 
+                AND tstamp BETWEEN '{start_time}' AND '{end_time}' 
+            ORDER BY tstamp LIMIT 1",
+            exchange = exc,
+            symbol = sym,
+            start_time = start.format("%Y-%m-%d %H:%M:%S"),
+            end_time = end.format("%Y-%m-%d %H:%M:%S"),
+            price = price
+        );
         self.client
             .query(statement.as_str(), &[])
             .await
@@ -249,7 +275,8 @@ impl Transactions {
             tx.side.to_string(),
             tx.avg_price,
             tx.volume,
-            tx.order.id        );
+            tx.order.id
+        );
         self.client.execute(statement.as_str(), &[]).await
     }
 }

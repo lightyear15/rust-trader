@@ -42,6 +42,7 @@ pub fn create(
     match strategy {
         "sample" => Ok(Box::new(Sample::new(exch, sym, time_frame))),
         "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame, settings))),
+        "macd1" => Ok(Box::new(Macd1::new(exch, sym, time_frame, settings))),
         _ => Err(Error::ErrNotFound(format!("can't find strategy {}", strategy))),
     }
 }
