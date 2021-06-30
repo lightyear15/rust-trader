@@ -3,6 +3,7 @@ use crate::orders::{Order, Side, Transaction, Type};
 use crate::strategies::{Action, SpotSinglePairStrategy};
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
+use log::debug;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use ta::indicators::MovingAverageConvergenceDivergence;
@@ -40,6 +41,7 @@ impl Macd1 {
             .expect("no smooth key")
             .parse::<usize>()
             .expect("smooth must be usize");
+        debug!("tstamp,price,macd,signal,histogram,positive,negative");
         Self {
             exchange,
             sym,
@@ -60,14 +62,36 @@ impl SpotSinglePairStrategy for Macd1 {
         format!("Macd1-{}-{}-{}", self.exchange, self.sym.to_string(), self.time_frame.to_string())
     }
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action {
-        let last_price = history.first().unwrap().close;
+        let last_cnd = history.first().unwrap();
+        let last_price = last_cnd.close;
+        let tstamp = last_cnd.tstamp;
         if self.macd_1st_start {
             self.macd.reset();
+            self.macd_trend.clear();
+            self.signal_trend.clear();
+            self.histo_trend.clear();
             for c in history.iter().skip(1).rev() {
                 let res = self.macd.next(c.close);
                 self.macd_trend.push_back(res.macd);
                 self.signal_trend.push_back(res.signal);
                 self.histo_trend.push_back(res.histogram);
+                debug!(
+                    "'{}',{},{},{},{}",
+                    c.tstamp.format("%Y-%m-%d %H:%M:%S"),
+                    c.close,
+                    res.macd,
+                    res.signal,
+                    res.histogram
+                );
+            }
+            while self.histo_trend.len() > 5 {
+                self.histo_trend.pop_front();
+            }
+            while self.macd_trend.len() > 5 {
+                self.macd_trend.pop_front();
+            }
+            while self.signal_trend.len() > 5 {
+                self.signal_trend.pop_front();
             }
             self.macd_1st_start = false;
         }
@@ -80,12 +104,28 @@ impl SpotSinglePairStrategy for Macd1 {
         self.histo_trend.pop_front();
         self.histo_trend.push_back(res.histogram);
 
-        if outstanding_orders.is_empty() {
+        let histos = self.histo_trend.make_contiguous();
+        let positive_cross = confirmed_positive_cross(histos);
+        let negative_cross = confirmed_negative_cross(histos);
+
+        debug!(
+            "'{}',{},{},{},{},{},{}",
+            tstamp.format("%Y-%m-%d %H:%M:%S"),
+            last_price,
+            res.macd,
+            res.signal,
+            res.histogram,
+            positive_cross,
+            negative_cross
+        );
+
+        // END COMPUTATION
+        if !outstanding_orders.is_empty() {
             return Action::None;
         }
 
-        let action = if let Some(ref tx) = self.last_tx {
-            if confirmed_negative_cross(self.histo_trend.make_contiguous()) {
+        let action = if negative_cross {
+            if let Some(ref tx) = self.last_tx {
                 let volume = tx.avg_price * tx.volume / last_price;
                 let mut order = Order::new();
                 order.exchange = self.exchange.clone();
@@ -97,7 +137,7 @@ impl SpotSinglePairStrategy for Macd1 {
             } else {
                 Action::None
             }
-        } else if confirmed_positive_cross(self.histo_trend.make_contiguous()) {
+        } else if positive_cross {
             let volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * CAPITAL / last_price;
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
@@ -115,6 +155,8 @@ impl SpotSinglePairStrategy for Macd1 {
     fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action {
         if matches!(tx.side, Side::Buy) {
             self.last_tx = Some(tx.clone());
+        } else {
+            self.last_tx = None;
         }
         Action::None
     }

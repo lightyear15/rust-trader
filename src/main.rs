@@ -68,6 +68,7 @@ async fn main() {
             start,
             end,
         } => {
+            log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
             let storage = storage::Candles::new(&settings.candle_storage).await;
             let cfg = settings
                 .strategies

@@ -3,6 +3,12 @@ appenders:
         kind: file
         path: ./trader.log
         append: false
+    analysis:
+        kind: file
+        path: ./strategy.csv
+        append: false
+        encoder:
+            pattern: "{m}{n}"
 
 root:
     level: info
@@ -11,7 +17,11 @@ root:
 
 loggers:
     trader:
-        level: debug
+        level: info
     trader::drivers::binance:
         level: info
+    trader::strategies::macd1:
+        level: debug
+        appenders:
+            - analysis
 
