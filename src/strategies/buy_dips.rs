@@ -85,6 +85,7 @@ impl SpotSinglePairStrategy for BuyDips {
         order.o_type = Type::Limit(price);
         order.volume = volume;
         order.expire = None;
+        order.tx_ref = tx.order.id;
         Action::NewOrder(order)
     }
     fn get_candles_history_size(&self) -> usize {

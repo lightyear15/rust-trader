@@ -14,6 +14,7 @@ mod error;
 mod import;
 mod live;
 mod orders;
+mod statistics;
 mod storage;
 mod strategies;
 mod symbol;
@@ -84,8 +85,8 @@ async fn main() {
             let res = backtest_spot_singlepair(storage, strategy, start, end)
                 .await
                 .expect("backtest epic fail");
-            println!("Backtest statistics {:?}", res.0);
             println!("Backtest final wallet{:?}", res.1);
+            println!("Backtest statistics {}", res.0.report());
         }
         Trade::Live {} => {
             log4rs::init_file("log4rs.yaml", Default::default()).unwrap();

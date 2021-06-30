@@ -1,8 +1,9 @@
 use crate::candles::Candle;
 use crate::error::Error;
 use crate::orders::{Order, Side, Transaction, Type};
+use crate::statistics::Statistics;
+use crate::strategies::Action;
 use crate::strategies::SpotSinglePairStrategy;
-use crate::strategies::{Action, Statistics};
 use crate::symbol::Symbol;
 use crate::{storage, utils, wallets};
 use chrono::{Duration, NaiveDate};
@@ -57,6 +58,7 @@ pub async fn backtest_spot_singlepair(
         let last = cnds.first().unwrap();
 
         // check outstanding orders with current candle
+
         // any expired orders?
         let mut i = 0;
         while i < outstanding_orders.len() {
@@ -67,6 +69,7 @@ pub async fn backtest_spot_singlepair(
                 i += 1;
             }
         }
+        // fullfilling any of the outstanding orders
         loop {
             let mut next_tx: Option<Transaction> = None;
             // find first order that can be fullfilled
@@ -87,13 +90,11 @@ pub async fn backtest_spot_singlepair(
                     outstanding_orders.push(tp_sl_or);
                 }
 
-                outstanding_orders.retain(|or| {or.id != tx.order.id});
+                outstanding_orders.retain(|or| or.id != tx.order.id);
                 let action = strategy.on_new_transaction(outstanding_orders.as_slice(), &tx);
 
                 stats.update_with_transaction(&tx);
                 update_wallet(&tx, strategy.symbol(), &mut wallet);
-
-                //println!("TX {:?} - {:?} -  {:?}", tx.tstamp, tx.side, wallet.assets);
 
                 transactions.push(tx);
                 on_action(action, &mut stats, &mut outstanding_orders);
@@ -174,6 +175,11 @@ fn update_wallet(tx: &Transaction, sym: &Symbol, wallet: &mut wallets::SpotWalle
             *wallet.assets.get_mut(&sym.base).expect("no base in wallet") -= tx.volume;
         }
     };
+    wallet.assets.values().for_each(|v| {
+        if v.is_sign_negative() {
+            panic!("wallet is negative {:?} with tx {:?}", wallet, tx)
+        }
+    });
 }
 
 fn order_from_tp_sl_tx(_tx: &Transaction) -> Option<Order> {
@@ -189,7 +195,7 @@ fn on_action(action: Action, stats: &mut Statistics, outstanding_orders: &mut Ve
         }
         Action::CancelOrder(id) => {
             //println!("received cancel order {}", reference);
-            outstanding_orders.retain(|or| {or.id != id});
+            outstanding_orders.retain(|or| or.id != id);
         }
         _ => {}
     }

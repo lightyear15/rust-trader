@@ -126,13 +126,17 @@ impl SpotSinglePairStrategy for Macd1 {
 
         let action = if negative_cross {
             if let Some(ref tx) = self.last_tx {
-                let volume = tx.avg_price * tx.volume / last_price;
+                let volume = tx.volume.min(tx.avg_price * tx.volume / last_price);
+                if *wallet.assets.get(&self.sym.base).expect("no base") < volume {
+                    panic!("volume {:?} in wallet {:?} tx {:?} - lastprice {:?}", volume, wallet, tx, last_price);
+                }
                 let mut order = Order::new();
                 order.exchange = self.exchange.clone();
                 order.symbol = self.sym.clone();
                 order.side = Side::Sell;
                 order.o_type = Type::Limit(last_price);
                 order.volume = volume;
+                order.tx_ref = tx.order.id;
                 Action::NewOrder(order)
             } else {
                 Action::None

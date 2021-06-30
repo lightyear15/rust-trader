@@ -439,6 +439,7 @@ impl From<LiveOrderUpdate> for Transaction {
                 symbol: Symbol::new(msg.symbol),
                 id: msg.order_id.parse::<u32>().unwrap_or(0),
                 o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
+                tx_ref: 0,
             },
         }
     }
