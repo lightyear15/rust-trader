@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use ta::indicators::MovingAverageConvergenceDivergence;
 use ta::{Next, Reset};
+use super::positive_cross;
 
 const CAPITAL: f64 = 0.05;
 #[derive(Clone)]
@@ -41,7 +42,7 @@ impl Macd1 {
             .expect("no smooth key")
             .parse::<usize>()
             .expect("smooth must be usize");
-        debug!("tstamp,price,macd,signal,histogram,positive,negative");
+        debug!("tstamp,price,macd,signal,histogram,buy,sell");
         Self {
             exchange,
             sym,
@@ -82,7 +83,7 @@ impl SpotSinglePairStrategy for Macd1 {
                     res.macd,
                     res.signal,
                     res.histogram
-                );
+                    );
             }
             while self.histo_trend.len() > 5 {
                 self.histo_trend.pop_front();
@@ -105,8 +106,8 @@ impl SpotSinglePairStrategy for Macd1 {
         self.histo_trend.push_back(res.histogram);
 
         let histos = self.histo_trend.make_contiguous();
-        let positive_cross = confirmed_positive_cross(histos);
-        let negative_cross = confirmed_negative_cross(histos);
+        let buy_signal = positive_cross(histos, 0.0);
+        let sell_signal = histos.last().unwrap() < histos.get(histos.len() - 2).unwrap();
 
         debug!(
             "'{}',{},{},{},{},{},{}",
@@ -115,33 +116,33 @@ impl SpotSinglePairStrategy for Macd1 {
             res.macd,
             res.signal,
             res.histogram,
-            positive_cross,
-            negative_cross
-        );
+            buy_signal,
+            sell_signal,
+            );
 
         // END COMPUTATION
         if !outstanding_orders.is_empty() {
             return Action::None;
         }
 
-        let action = if negative_cross {
-            if let Some(ref tx) = self.last_tx {
-                let volume = tx.volume.min(tx.avg_price * tx.volume / last_price);
-                if *wallet.assets.get(&self.sym.base).expect("no base") < volume {
-                    panic!("volume {:?} in wallet {:?} tx {:?} - lastprice {:?}", volume, wallet, tx, last_price);
-                }
-                let mut order = Order::new();
-                order.exchange = self.exchange.clone();
-                order.symbol = self.sym.clone();
-                order.side = Side::Sell;
-                order.o_type = Type::Limit(last_price);
-                order.volume = volume;
-                order.tx_ref = tx.order.id;
-                Action::NewOrder(order)
-            } else {
-                Action::None
+        let action = if sell_signal && self.last_tx.is_some() {
+            let tx = self.last_tx.as_ref().unwrap();
+            let volume = tx.volume.min(tx.avg_price * tx.volume / last_price);
+            if *wallet.assets.get(&self.sym.base).expect("no base") < volume {
+                panic!(
+                    "volume {:?} in wallet {:?} tx {:?} - lastprice {:?}",
+                    volume, wallet, tx, last_price
+                    );
             }
-        } else if positive_cross {
+            let mut order = Order::new();
+            order.exchange = self.exchange.clone();
+            order.symbol = self.sym.clone();
+            order.side = Side::Sell;
+            order.o_type = Type::Limit(last_price);
+            order.volume = volume;
+            order.tx_ref = tx.order.id;
+            Action::NewOrder(order)
+        } else if buy_signal && self.last_tx.is_none() {
             let volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * CAPITAL / last_price;
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
@@ -178,24 +179,4 @@ impl SpotSinglePairStrategy for Macd1 {
     fn time_frame(&self) -> &chrono::Duration {
         &self.time_frame
     }
-}
-
-// all values negative, last is positive
-fn positive_cross(values: &[f64]) -> bool {
-    values.iter().take(values.len() - 1).all(|value| value.is_sign_negative()) && values.last().unwrap().is_sign_positive()
-}
-// all values negative, last 2 are positive
-fn confirmed_positive_cross(values: &[f64]) -> bool {
-    values.iter().take(values.len() - 2).all(|value| value.is_sign_negative())
-        && values.iter().skip(values.len() - 2).all(|value| value.is_sign_positive())
-}
-
-// all values positive, last is negative
-fn negative_cross(values: &[f64]) -> bool {
-    values.iter().take(values.len() - 1).all(|value| value.is_sign_positive()) && values.last().unwrap().is_sign_negative()
-}
-// all values positive, last 2 are negative
-fn confirmed_negative_cross(values: &[f64]) -> bool {
-    values.iter().take(values.len() - 2).all(|value| value.is_sign_positive())
-        && values.iter().skip(values.len() - 2).all(|value| value.is_sign_negative())
 }

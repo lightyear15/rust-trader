@@ -8,9 +8,11 @@ use std::collections::HashMap;
 pub mod buy_dips;
 pub mod sample;
 pub mod macd1;
+pub mod macd2;
 pub use buy_dips::BuyDips;
 pub use sample::Sample;
 pub use macd1::Macd1;
+pub use macd2::Macd2;
 
 #[derive(Debug)]
 pub enum Action {
@@ -43,7 +45,26 @@ pub fn create(
         "sample" => Ok(Box::new(Sample::new(exch, sym, time_frame))),
         "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame, settings))),
         "macd1" => Ok(Box::new(Macd1::new(exch, sym, time_frame, settings))),
+        "macd2" => Ok(Box::new(Macd2::new(exch, sym, time_frame, settings))),
         _ => Err(Error::ErrNotFound(format!("can't find strategy {}", strategy))),
     }
 }
 
+fn positive_cross(values: &[f64], threshold: f64) -> bool {
+    values.iter().take(values.len() - 1).all(|value| *value < threshold) && *values.last().unwrap() >= threshold
+}
+// all values negative, last 2 are positive
+fn confirmed_positive_cross(values: &[f64], threshold: f64) -> bool {
+    values.iter().take(values.len() - 2).all(|value| *value < threshold)
+        && values.iter().skip(values.len() - 2).all(|value| *value >= threshold)
+}
+
+// all values positive, last is negative
+fn negative_cross(values: &[f64], threshold: f64) -> bool {
+    values.iter().take(values.len() - 1).all(|value| *value > threshold) && *values.last().unwrap() <= threshold
+}
+// all values positive, last 2 are negative
+fn confirmed_negative_cross(values: &[f64], threshold: f64) -> bool {
+    values.iter().take(values.len() - 2).all(|value| *value > threshold)
+        && values.iter().skip(values.len() - 2).all(|value| *value <= threshold)
+}

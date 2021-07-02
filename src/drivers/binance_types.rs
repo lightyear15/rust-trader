@@ -124,6 +124,9 @@ pub(super) struct Candle {
 }
 impl From<Candle> for candles::Candle {
     fn from(cnd: Candle) -> Self {
+        if cnd.tstamp_close < cnd.tstamp_open {
+            panic!("close {}, open {}", cnd.tstamp_close, cnd.tstamp_open);
+        }
         Self {
             open: cnd.open.parse::<f64>().expect("in cnd.open"),
             low: cnd.low.parse::<f64>().expect("in cnd.low"),

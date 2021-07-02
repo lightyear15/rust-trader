@@ -18,6 +18,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use std::collections::HashMap;
+use scan_fmt::scan_fmt;
 
 use super::binance_types::*;
 
@@ -425,6 +426,7 @@ impl From<LiveOrderUpdate> for Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
+        let (id, tx_ref) = scan_fmt!(&msg.order_id, "{d}#{d}", u32, u32).expect("order id");
         Self {
             tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
             symbol: msg.symbol.clone(),
@@ -437,9 +439,9 @@ impl From<LiveOrderUpdate> for Transaction {
                 expire: None,
                 side: msg.side.into(),
                 symbol: Symbol::new(msg.symbol),
-                id: msg.order_id.parse::<u32>().unwrap_or(0),
+                id: id,
                 o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
-                tx_ref: 0,
+                tx_ref: tx_ref,
             },
         }
     }
@@ -493,6 +495,7 @@ fn order_to_query(order: &orders::Order) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
     let side: Side = order.side.clone().into();
     let qty = normalize_it(order.volume, order.symbol.min_volume, order.symbol.volume_step);
+    let order_id = format!("{}#{}", order.id.to_string(), order.tx_ref);
     let mut queries: Vec<(String, String)> = vec![
         (String::from("symbol"), order.symbol.symbol.clone()),
         (String::from("side"), side.to_string()),
@@ -500,7 +503,7 @@ fn order_to_query(order: &orders::Order) -> Vec<(String, String)> {
             String::from("quantity"),
             format!("{:.prec$}", qty, prec = order.symbol.base_decimals),
         ),
-        (String::from("newClientOrderId"), order.id.to_string()),
+        (String::from("newClientOrderId"), order_id),
         (String::from("newOrderRespType"), String::from("ACK")),
         (String::from("timestamp"), tstamp.to_string()),
     ];
@@ -520,6 +523,7 @@ fn order_to_query(order: &orders::Order) -> Vec<(String, String)> {
     }
     queries
 }
+
 fn cancel_query(symbol: String, id: u32) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
     vec![

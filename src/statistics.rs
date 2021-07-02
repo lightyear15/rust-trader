@@ -27,6 +27,7 @@ impl Statistics {
             trade_win_loss: Vec::new(),
         }
     }
+
     pub fn report(&self) -> String {
         let wins = self.trade_win_loss.iter().fold((0.0, 0), |(tot, count), trade| {
             if trade.is_sign_positive() {
@@ -45,14 +46,15 @@ impl Statistics {
         format!(
             "num orders: {}
                  gain %: {}
-                 lowest/highest: {:.2}/{:.2}
+                 lowest/highest: {:.3}/{:.3}
+                 total transactions: {}
                  total trades : {}
-                 wins/losses: {:.2}/{:.2}
-                 avg win/loss: {:.2}/{:.2}",
+                 wins/losses: {:.3}/{:.3}
+                 avg win/loss: {:.3}/{:.3}",
             self.orders,
             (self.balance - self.balance_start) / self.balance_start * 100.0,
-            self.lowest_balance,
-            self.highest_balance,
+            self.lowest_balance, self.highest_balance,
+            self.tx_history.len(),
             self.trade_win_loss.len(),
             wins.1,
             losses.1,
@@ -82,6 +84,9 @@ impl Statistics {
                 .expect("orig_tx");
             let perc = (tx.avg_price - orig_tx.avg_price) / orig_tx.avg_price;
             self.trade_win_loss.push(perc);
+            println!("order with ref {} -> {}", tx.order.id, tx.order.tx_ref);
+        } else {
+            println!("order without ref {}", tx.order.id);
         }
     }
     pub fn update_with_order(&mut self, _ord: &Order) {

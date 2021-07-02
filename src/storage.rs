@@ -267,15 +267,16 @@ impl Transactions {
 
     pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
         let statement = format!(
-            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id)
-                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {})",
+            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, reference)
+                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, {})",
             exchange,
             tx.symbol,
             tx.tstamp,
             tx.side.to_string(),
             tx.avg_price,
             tx.volume,
-            tx.order.id
+            tx.order.id,
+            tx.order.tx_ref,
         );
         self.client.execute(statement.as_str(), &[]).await
     }
