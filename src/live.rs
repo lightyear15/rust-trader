@@ -69,6 +69,10 @@ pub async fn run_live(
                 wallet = spot_wallet;
                 Action::None
             }
+            LiveEvent::AssetUpdate{asset, delta} => {
+                debug!("received asset change: {} {}", asset, delta);
+                Action::None
+            }
             _ => {
                 warn!("unkown event");
                 Action::None

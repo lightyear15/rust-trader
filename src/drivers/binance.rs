@@ -18,7 +18,6 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use std::collections::HashMap;
-use scan_fmt::scan_fmt;
 
 use super::binance_types::*;
 
@@ -285,120 +284,6 @@ impl LiveFeed for Live {
     }
 }
 
-//---------------------------------
-// binance messages and objects
-#[derive(Debug, serde::Deserialize, Clone)]
-struct ExchangeInfo {
-    symbols: Vec<SymbolInfo>,
-}
-#[derive(Debug, serde::Deserialize, Clone)]
-struct ListenKey {
-    #[serde(alias = "listenKey")]
-    listen_key: String,
-}
-#[derive(Debug, serde::Deserialize)]
-struct AccountStatusData {
-    balances: Vec<Balance>,
-    #[serde(alias = "totalAssetOfBtc")]
-    total: String,
-}
-#[derive(Debug, serde::Deserialize)]
-struct AccountStatusSnapshot {
-    data: AccountStatusData,
-    #[serde(alias = "updateTime")]
-    tstamp: u64,
-}
-#[derive(Debug, serde::Deserialize)]
-struct AccountStatus {
-    #[serde(alias = "snapshotVos")]
-    snapshot: Vec<AccountStatusSnapshot>,
-    msg: String,
-    code: i16,
-}
-
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub enum Type {
-    #[serde(alias = "MARKET")]
-    Market,
-    #[serde(alias = "LIMIT")]
-    Limit,
-    #[serde(alias = "STOP_LOSS")]
-    StopLoss,
-}
-#[derive(Debug, serde::Deserialize)]
-enum OrderStatus {
-    #[serde(alias = "NEW")]
-    New,
-    #[serde(alias = "PARTIALLY_FILLED")]
-    PartiallyFilled,
-    #[serde(alias = "FILLED")]
-    Filled,
-    #[serde(alias = "CANCELED")]
-    Canceled,
-    #[serde(alias = "PENDING_CANCEL")]
-    PendingCancel,
-    #[serde(alias = "REJECTED")]
-    Rejected,
-    #[serde(alias = "EXPIRED")]
-    Expired,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct LiveOrderUpdate {
-    #[serde(alias = "E")]
-    tstamp: u64,
-    #[serde(alias = "s")]
-    symbol: String,
-    #[serde(alias = "c")]
-    order_id: String,
-    #[serde(alias = "X")]
-    order_status: OrderStatus,
-    #[serde(alias = "S")]
-    side: Side,
-    #[serde(alias = "Z")]
-    cumulative_price: String,
-    #[serde(alias = "z")]
-    cumulative_quantity: String,
-    // order related stuff
-    #[serde(alias = "q")]
-    order_quantity: String,
-    #[serde(alias = "p")]
-    order_price: String,
-    #[serde(alias = "o")]
-    order_type: Type,
-}
-#[derive(Debug, serde::Deserialize)]
-struct Balance {
-    #[serde(alias = "a")]
-    asset: String,
-    #[serde(alias = "f")]
-    free: String,
-    #[serde(alias = "l")]
-    locked: String,
-}
-#[derive(Debug, serde::Deserialize)]
-struct LiveAccountUpdate {
-    #[serde(alias = "E")]
-    tstamp: u64,
-    #[serde(alias = "B")]
-    balances: Vec<Balance>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(untagged)]
-enum LiveMessageType {
-    LiveCandle(LiveCandleMsg),
-    OrderUpdate(LiveOrderUpdate),
-    AccountUpdate(LiveAccountUpdate),
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct LiveMessage {
-    //{"stream":"btceur@kline_1m","data": {}}
-    stream: String,
-    data: LiveMessageType,
-}
-
 // --------------------------------
 // helper functions
 fn to_interval(interval: &Duration) -> String {
@@ -422,47 +307,6 @@ fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     streams.join("/")
 }
 
-impl From<LiveOrderUpdate> for Transaction {
-    fn from(msg: LiveOrderUpdate) -> Self {
-        let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
-        let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
-        let (id, tx_ref) = scan_fmt!(&msg.order_id, "{d}#{d}", u32, u32).expect("order id");
-        Self {
-            tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
-            symbol: msg.symbol.clone(),
-            side: msg.side.clone().into(),
-            avg_price: tot_price / tot_quantity,
-            volume: tot_quantity,
-            order: orders::Order {
-                volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
-                exchange: String::from("binance"),
-                expire: None,
-                side: msg.side.into(),
-                symbol: Symbol::new(msg.symbol),
-                id: id,
-                o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
-                tx_ref: tx_ref,
-            },
-        }
-    }
-}
-impl From<Vec<Balance>> for SpotWallet {
-    fn from(mut msg: Vec<Balance>) -> Self {
-        Self {
-            assets: msg
-                .drain(0..)
-                .map(|balance| (balance.asset, balance.free.parse::<f64>().expect("in balance.free")))
-                .collect::<HashMap<_, _>>(),
-        }
-    }
-}
-fn to_type(msg_o_type: &Type, o_price: f64) -> orders::Type {
-    match msg_o_type {
-        Type::Limit => orders::Type::Limit(o_price),
-        Type::Market => orders::Type::Market,
-        _ => panic!("unknown type"),
-    }
-}
 
 fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
     match mesg.data {
@@ -485,7 +329,11 @@ fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
             };
         }
         LiveMessageType::AccountUpdate(account_msg) => {
-            return Some(LiveEvent::Balance(account_msg.balances.into()));
+            return Some(LiveEvent::Balance(account_msg.into()));
+        }
+        LiveMessageType::BalanceUpdate(balance_update) => {
+            let delta = balance_update.delta.parse::<f64>().expect("not a delta");
+            return Some(LiveEvent::AssetUpdate{asset: balance_update.asset, delta});
         }
     }
     None

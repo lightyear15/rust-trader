@@ -102,6 +102,7 @@ async fn main() {
                 actix_rt::Arbiter::spawn(async move {
                     run_live(strat, exc_sett, &tx_storage).await;
                 });
+                actix::clock::delay_for(std::time::Duration::from_secs(5)).await;
             }
             actix_rt::Arbiter::local_join().await;
         }

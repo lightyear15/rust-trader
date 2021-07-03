@@ -42,6 +42,7 @@ pub enum LiveEvent {
     NewOrder(orders::Order),
     Candle(String, candles::Candle),
     Balance(wallets::SpotWallet),
+    AssetUpdate{asset: String, delta: f64},
 }
 
 #[derive(Clone)]
