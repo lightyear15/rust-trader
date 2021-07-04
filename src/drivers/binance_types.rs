@@ -255,7 +255,7 @@ impl From<LiveOrderUpdate> for orders::Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
-        let (id, tx_ref) = scan_fmt!(&msg.order_id, "{d}#{d}", u32, u32).expect("order id");
+        let (id, tx_ref) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32).expect("order id");
         Self {
             tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
             symbol: msg.symbol.clone(),

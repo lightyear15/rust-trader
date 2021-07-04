@@ -343,7 +343,7 @@ fn order_to_query(order: &orders::Order) -> Vec<(String, String)> {
     let tstamp = Utc::now().timestamp_millis() as u64;
     let side: Side = order.side.clone().into();
     let qty = normalize_it(order.volume, order.symbol.min_volume, order.symbol.volume_step);
-    let order_id = format!("{}#{}", order.id.to_string(), order.tx_ref);
+    let order_id = format!("{}_{}", order.id.to_string(), order.tx_ref);
     let mut queries: Vec<(String, String)> = vec![
         (String::from("symbol"), order.symbol.symbol.clone()),
         (String::from("side"), side.to_string()),
