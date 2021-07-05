@@ -30,10 +30,11 @@ pub async fn run_live(
             LiveEvent::Candle(sym, candle) => {
                 if sym == strategy.symbol().symbol {
                     debug!("new candle event at {}", Utc::now());
-                    buffer.pop_front();
-                    buffer.push_back(candle);
+                    buffer.pop_back();
+                    buffer.push_front(candle);
                     strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous())
                 } else {
+                    debug!("ignoring new candle event at {} {}", Utc::now(), sym);
                     Action::None
                 }
             }
@@ -54,6 +55,7 @@ pub async fn run_live(
                         .expect("in storing new transaction");
                     strategy.on_new_transaction(orders.as_slice(), &tx)
                 } else {
+                    debug!("ignoring new transaction event at {} {}", Utc::now(), tx.symbol);
                     Action::None
                 }
             }
@@ -61,8 +63,11 @@ pub async fn run_live(
                 if order.symbol.symbol == strategy.symbol().symbol {
                     debug!("new order event at {}\n\t {:?}", Utc::now(), order);
                     orders.push(order);
+                    Action::None
+                } else {
+                    debug!("ignoring new order event at {} {}", Utc::now(), order.symbol.symbol);
+                    Action::None
                 }
-                Action::None
             }
             LiveEvent::Balance(spot_wallet) => {
                 debug!("new balance event at {}", Utc::now());
