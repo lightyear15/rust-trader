@@ -204,6 +204,7 @@ pub struct Live {
     url: String,
     ws_conn: WsConnection,
     hb: chrono::NaiveDateTime,
+    keep_alive: chrono::NaiveDateTime,
 }
 
 impl Live {
@@ -225,6 +226,7 @@ impl Live {
             url: base_url,
             ws_conn: conn,
             hb: Utc::now().naive_utc(),
+            keep_alive: Utc::now().naive_utc(),
         }
     }
 }
@@ -247,15 +249,24 @@ impl LiveFeed for Live {
         self.ws_conn = conn;
         debug!("new response {:?}", resp);
         self.token = new_key;
+        let now = Utc::now().naive_utc();
+        self.hb =now.clone();
+        self.keep_alive = now;
     }
 
     async fn next(&mut self) -> LiveEvent {
-        let keep_alive: Duration = Duration::minutes(30);
+        let heat_beat_ping = Duration::minutes(30);
+        let keep_alive_user_stream= Duration::minutes(60);
         loop {
-            if Utc::now().naive_utc() - self.hb > keep_alive {
+            let now = Utc::now().naive_utc();
+            if now - self.hb > heat_beat_ping {
                 self.ws_conn.send(Message::Ping(Bytes::from("hello"))).await.expect("in sending ping");
-                self.hb = Utc::now().naive_utc();
+                self.hb = now.clone();
             }
+            if now - self.keep_alive > keep_alive_user_stream {
+                return LiveEvent::ReconnectionRequired;
+            }
+
             let nnext = self.ws_conn.next().await;
             debug!("[{}] received a next {:?}", Utc::now(), nnext);
             if nnext.is_none() {

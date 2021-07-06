@@ -3,7 +3,7 @@ use crate::orders::Order;
 use crate::storage;
 use crate::strategies::{Action, SpotSinglePairStrategy};
 use chrono::Utc;
-use log::{debug, info, warn};
+use log::{debug, info, warn, error};
 use std::collections::VecDeque;
 
 pub async fn run_live(
@@ -29,6 +29,10 @@ pub async fn run_live(
         let action = match msg {
             LiveEvent::Candle(sym, candle) => {
                 if sym == strategy.symbol().symbol {
+                    if candle.tstamp == buffer.front().unwrap().tstamp { 
+                        error!("repeated candle {:?} {:?}", candle, buffer.front().unwrap());
+                        buffer.pop_front();
+                    }  
                     debug!("new candle event at {}", Utc::now());
                     buffer.pop_back();
                     buffer.push_front(candle);
