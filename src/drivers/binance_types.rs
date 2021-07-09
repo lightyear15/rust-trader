@@ -255,7 +255,14 @@ impl From<LiveOrderUpdate> for orders::Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
-        let (id, tx_ref) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32).expect("order id");
+        let mut id: u32 = 0;
+        let mut tx_ref : u32 = 0;
+        if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
+            id = sc_id;
+            tx_ref = sc_tx_ref;
+        } else if let Ok(sc_id) = msg.order_id.parse::<u32>() {
+            id = sc_id;
+        }
         Self {
             tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
             symbol: msg.symbol.clone(),
@@ -275,6 +282,7 @@ impl From<LiveOrderUpdate> for orders::Transaction {
         }
     }
 }
+
 fn to_type(msg_o_type: &Type, o_price: f64) -> orders::Type {
     match msg_o_type {
         Type::Limit => orders::Type::Limit(o_price),

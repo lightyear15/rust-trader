@@ -51,15 +51,17 @@ impl Rest {
 impl RestApi for Rest {
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String {
         let url = self.url.clone() + "/api/v3/userDataStream";
-        let request = if let Some(token) = old_token {
+        if let Some(token) = old_token {
             self.client
                 .put(url)
-                .query(&["listen_key", &token])
+                .query(&[("listen_key", &token)])
                 .expect("in building put ws token")
+                .send()
+                .await
+                .expect("in sending listen_key");
+            token
         } else {
             self.client.post(url)
-        };
-        request
             .send()
             .await
             .expect("in sending listen_key request")
@@ -67,6 +69,7 @@ impl RestApi for Rest {
             .await
             .expect("in parsing userDataStream response")
             .listen_key
+        }
     }
 
     async fn get_symbol_info(&self, sym: &str) -> Result<Symbol, Error> {
@@ -203,8 +206,10 @@ pub struct Live {
     token: String,
     url: String,
     ws_conn: WsConnection,
-    hb: chrono::NaiveDateTime,
-    keep_alive: chrono::NaiveDateTime,
+    heartbeat: chrono::NaiveDateTime,
+    refresh: chrono::NaiveDateTime,
+    reconnect: chrono::NaiveDateTime,
+
 }
 
 impl Live {
@@ -220,13 +225,15 @@ impl Live {
             .await
             .expect("on ws connecting to binance");
         debug!("new response {:?}", resp);
+        let now = Utc::now().naive_utc();
         Self {
             ticks,
             token: listen_key,
             url: base_url,
             ws_conn: conn,
-            hb: Utc::now().naive_utc(),
-            keep_alive: Utc::now().naive_utc(),
+            heartbeat: now,
+            refresh: now,
+            reconnect: now,
         }
     }
 }
@@ -250,28 +257,36 @@ impl LiveFeed for Live {
         debug!("new response {:?}", resp);
         self.token = new_key;
         let now = Utc::now().naive_utc();
-        self.hb =now.clone();
-        self.keep_alive = now;
+        self.heartbeat =now;
+        self.refresh = now;
+        self.reconnect = now;
     }
 
     async fn next(&mut self) -> LiveEvent {
-        let heat_beat_ping = Duration::minutes(30);
-        let keep_alive_user_stream= Duration::minutes(60);
+        let hb_interval = Duration::minutes(30);
+        let refr_interval = Duration::minutes(60);
+        let recon_interval = Duration::days(1);
         loop {
             let now = Utc::now().naive_utc();
-            if now - self.hb > heat_beat_ping {
+            if now - self.heartbeat > hb_interval {
                 self.ws_conn.send(Message::Ping(Bytes::from("hello"))).await.expect("in sending ping");
-                self.hb = now.clone();
+                self.heartbeat = now;
             }
-            if now - self.keep_alive > keep_alive_user_stream {
+            if now - self.refresh > refr_interval {
+                self.heartbeat = now;
+                return LiveEvent::TokenRefreshRequired;
+            }
+            if now - self.reconnect > recon_interval {
                 return LiveEvent::ReconnectionRequired;
             }
 
             let nnext = self.ws_conn.next().await;
             debug!("[{}] received a next {:?}", Utc::now(), nnext);
+            /*
             if nnext.is_none() {
                 return LiveEvent::ReconnectionRequired;
             }
+            */
             let msg = nnext.unwrap().expect("in next message");
             match msg {
                 Frame::Text(text) => {

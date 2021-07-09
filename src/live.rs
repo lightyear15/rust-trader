@@ -42,10 +42,15 @@ pub async fn run_live(
                     Action::None
                 }
             }
+            LiveEvent::TokenRefreshRequired => {
+                info!("ReconnectionRequired");
+                let token = feed.token();
+                rest.refresh_ws_token(Some(token)).await;
+                Action::None
+            }
             LiveEvent::ReconnectionRequired => {
                 info!("ReconnectionRequired");
-                let old_token = feed.token();
-                let new_token = rest.refresh_ws_token(Some(old_token)).await;
+                let new_token = rest.refresh_ws_token(None).await;
                 feed.reconnect(new_token).await;
                 Action::None
             }

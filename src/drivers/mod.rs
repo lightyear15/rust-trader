@@ -36,6 +36,7 @@ pub fn create_rest_client(exchange: &str, config: &ExchangeSettings) -> Result<B
 #[derive(Debug)]
 pub enum LiveEvent {
     ReconnectionRequired,
+    TokenRefreshRequired,
     None,
     Generic(String),
     Transaction(orders::Transaction),
