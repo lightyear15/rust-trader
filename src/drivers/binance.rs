@@ -243,6 +243,7 @@ impl LiveFeed for Live {
     fn token(&self) -> String {
         self.token.clone()
     }
+
     async fn reconnect(&mut self, new_key: String) {
         let stream_list = build_stream_list(self.ticks.as_slice(), &new_key);
         let url = self.url.clone() + &stream_list;
@@ -264,8 +265,8 @@ impl LiveFeed for Live {
 
     async fn next(&mut self) -> LiveEvent {
         let hb_interval = Duration::minutes(30);
-        let refr_interval = Duration::minutes(60);
-        let recon_interval = Duration::days(1);
+        let refr_interval = Duration::minutes(50);
+        let recon_interval = Duration::hours(23);
         loop {
             let now = Utc::now().naive_utc();
             if now - self.heartbeat > hb_interval {
@@ -273,7 +274,7 @@ impl LiveFeed for Live {
                 self.heartbeat = now;
             }
             if now - self.refresh > refr_interval {
-                self.heartbeat = now;
+                self.refresh = now;
                 return LiveEvent::TokenRefreshRequired;
             }
             if now - self.reconnect > recon_interval {

@@ -43,7 +43,7 @@ pub async fn run_live(
                 }
             }
             LiveEvent::TokenRefreshRequired => {
-                info!("ReconnectionRequired");
+                info!("Token refresh required");
                 let token = feed.token();
                 rest.refresh_ws_token(Some(token)).await;
                 Action::None
