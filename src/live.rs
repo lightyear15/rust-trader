@@ -5,6 +5,7 @@ use crate::strategies::{Action, SpotSinglePairStrategy};
 use chrono::Utc;
 use log::{debug, info, warn, error};
 use std::collections::VecDeque;
+use std::iter::Extend;
 
 pub async fn run_live(
     mut strategy: Box<dyn SpotSinglePairStrategy>,
@@ -43,13 +44,13 @@ pub async fn run_live(
                 }
             }
             LiveEvent::TokenRefreshRequired => {
-                info!("Token refresh required");
+                debug!("Token refresh required");
                 let token = feed.token();
                 rest.refresh_ws_token(Some(token)).await;
                 Action::None
             }
             LiveEvent::ReconnectionRequired => {
-                info!("ReconnectionRequired");
+                debug!("ReconnectionRequired");
                 let new_token = rest.refresh_ws_token(None).await;
                 feed.reconnect(new_token).await;
                 Action::None
@@ -78,9 +79,9 @@ pub async fn run_live(
                     Action::None
                 }
             }
-            LiveEvent::Balance(spot_wallet) => {
+            LiveEvent::BalanceUpdate(spot_wallet) => {
                 debug!("new balance event at {}", Utc::now());
-                wallet = spot_wallet;
+                wallet.assets.extend(spot_wallet.assets.into_iter());
                 Action::None
             }
             LiveEvent::AssetUpdate{asset, delta} => {

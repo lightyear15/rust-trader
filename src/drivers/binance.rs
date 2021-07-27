@@ -356,7 +356,7 @@ fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
             };
         }
         LiveMessageType::AccountUpdate(account_msg) => {
-            return Some(LiveEvent::Balance(account_msg.into()));
+            return Some(LiveEvent::BalanceUpdate(account_msg.into()));
         }
         LiveMessageType::BalanceUpdate(balance_update) => {
             let delta = balance_update.delta.parse::<f64>().expect("not a delta");

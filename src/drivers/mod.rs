@@ -42,7 +42,7 @@ pub enum LiveEvent {
     Transaction(orders::Transaction),
     NewOrder(orders::Order),
     Candle(String, candles::Candle),
-    Balance(wallets::SpotWallet),
+    BalanceUpdate(wallets::SpotWallet),
     AssetUpdate{asset: String, delta: f64},
 }
 
