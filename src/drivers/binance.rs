@@ -52,23 +52,28 @@ impl RestApi for Rest {
     async fn refresh_ws_token(&self, old_token: Option<String>) -> String {
         let url = self.url.clone() + "/api/v3/userDataStream";
         if let Some(token) = old_token {
-            self.client
+            let resp = self
+                .client
                 .put(url)
-                .query(&[("listen_key", &token)])
+                .query(&[("listenKey", &token)])
                 .expect("in building put ws token")
                 .send()
                 .await
                 .expect("in sending listen_key");
+            if !resp.status().is_success() {
+                panic!("token refresh failed {:?}", resp)
+            }
             token
         } else {
-            self.client.post(url)
-            .send()
-            .await
-            .expect("in sending listen_key request")
-            .json::<ListenKey>()
-            .await
-            .expect("in parsing userDataStream response")
-            .listen_key
+            self.client
+                .post(url)
+                .send()
+                .await
+                .expect("in sending listen_key request")
+                .json::<ListenKey>()
+                .await
+                .expect("in parsing userDataStream response")
+                .listen_key
         }
     }
 
@@ -83,7 +88,6 @@ impl RestApi for Rest {
             .limit(128_000_000)
             .await
             .expect("in json::<ExchangeInfo>");
-
         let x = info
             .symbols
             .drain(0..)
@@ -209,7 +213,6 @@ pub struct Live {
     heartbeat: chrono::NaiveDateTime,
     refresh: chrono::NaiveDateTime,
     reconnect: chrono::NaiveDateTime,
-
 }
 
 impl Live {
@@ -258,27 +261,37 @@ impl LiveFeed for Live {
         debug!("new response {:?}", resp);
         self.token = new_key;
         let now = Utc::now().naive_utc();
-        self.heartbeat =now;
+        self.heartbeat = now;
         self.refresh = now;
         self.reconnect = now;
     }
 
     async fn next(&mut self) -> LiveEvent {
         let hb_interval = Duration::minutes(30);
-        let refr_interval = Duration::minutes(50);
-        let recon_interval = Duration::hours(23);
+        let refr_interval = Duration::minutes(60);
+        let refr_interval_grace = Duration::minutes(45);
+        let recon_interval = Duration::hours(24);
         loop {
             let now = Utc::now().naive_utc();
-            if now - self.heartbeat > hb_interval {
-                self.ws_conn.send(Message::Ping(Bytes::from("hello"))).await.expect("in sending ping");
-                self.heartbeat = now;
+            // reconnection required
+            if now - self.reconnect > recon_interval {
+                return LiveEvent::ReconnectionRequired;
             }
             if now - self.refresh > refr_interval {
+                return LiveEvent::ReconnectionRequired;
+            }
+            // refresh required
+            if now - self.refresh > refr_interval_grace {
                 self.refresh = now;
                 return LiveEvent::TokenRefreshRequired;
             }
-            if now - self.reconnect > recon_interval {
-                return LiveEvent::ReconnectionRequired;
+            // ping required
+            if now - self.heartbeat > hb_interval {
+                self.ws_conn
+                    .send(Message::Ping(Bytes::from("hello")))
+                    .await
+                    .expect("in sending ping");
+                self.heartbeat = now;
             }
 
             let nnext = self.ws_conn.next().await;
@@ -334,7 +347,6 @@ fn build_stream_list(ticks: &[Tick], listen_key: &str) -> String {
     streams.join("/")
 }
 
-
 fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
     match mesg.data {
         LiveMessageType::LiveCandle(candle_msg) => {
@@ -360,7 +372,10 @@ fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
         }
         LiveMessageType::BalanceUpdate(balance_update) => {
             let delta = balance_update.delta.parse::<f64>().expect("not a delta");
-            return Some(LiveEvent::AssetUpdate{asset: balance_update.asset, delta});
+            return Some(LiveEvent::AssetUpdate {
+                asset: balance_update.asset,
+                delta,
+            });
         }
     }
     None

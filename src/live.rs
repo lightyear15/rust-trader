@@ -13,6 +13,7 @@ pub async fn run_live(
     mut feed: Box<dyn LiveFeed>,
     tx_storage: storage::Transactions,
 ) {
+    let my_symbol = strategy.symbol().pretty.clone();
     info!("starting strategy {} on symbol {:?}", strategy.name(), strategy.symbol());
     let hist_size = strategy.get_candles_history_size();
     rest.get_candles(&strategy.symbol().symbol, Some(strategy.time_frame()), None, Some(hist_size))
@@ -31,10 +32,10 @@ pub async fn run_live(
             LiveEvent::Candle(sym, candle) => {
                 if sym == strategy.symbol().symbol {
                     if candle.tstamp == buffer.front().unwrap().tstamp { 
-                        error!("repeated candle {:?} {:?}", candle, buffer.front().unwrap());
+                        error!("{} - repeated candle {:?} {:?}", my_symbol, candle, buffer.front().unwrap());
                         buffer.pop_front();
                     }  
-                    debug!("new candle event at {}", Utc::now());
+                    debug!("{} - new candle event at {}", my_symbol, Utc::now());
                     buffer.pop_back();
                     buffer.push_front(candle);
                     strategy.on_new_candle(&wallet, orders.as_slice(), buffer.make_contiguous())
@@ -44,13 +45,13 @@ pub async fn run_live(
                 }
             }
             LiveEvent::TokenRefreshRequired => {
-                debug!("Token refresh required");
+                debug!("{} - Token refresh required", my_symbol);
                 let token = feed.token();
                 rest.refresh_ws_token(Some(token)).await;
                 Action::None
             }
             LiveEvent::ReconnectionRequired => {
-                debug!("ReconnectionRequired");
+                debug!("{} - ReconnectionRequired", my_symbol);
                 let new_token = rest.refresh_ws_token(None).await;
                 feed.reconnect(new_token).await;
                 Action::None
