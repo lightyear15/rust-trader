@@ -193,7 +193,7 @@ fn on_action(action: Action, stats: &mut Statistics, outstanding_orders: &mut Ve
             stats.update_with_order(&or);
             outstanding_orders.push(or);
         }
-        Action::CancelOrder(id) => {
+        Action::CancelOrder(_, id) => {
             //println!("received cancel order {}", reference);
             outstanding_orders.retain(|or| or.id != id);
         }

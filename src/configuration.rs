@@ -6,7 +6,7 @@ pub struct ExchangeSettings {
     pub secret_key: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 pub struct StrategySettings {
     pub name: String,
     pub exchange: String,

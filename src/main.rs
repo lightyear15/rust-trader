@@ -90,44 +90,21 @@ async fn main() {
         }
         Trade::Live {} => {
             log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
-            for strat in settings.strategies {
-                println!("main - starting strategy {} on {}", strat.name, strat.symbol);
-                let exc_sett: ExchangeSettings = settings
-                    .exchanges
-                    .get(&strat.exchange)
-                    .expect("can't find the exchange in config")
-                    .clone();
+            let tx_storage: String = settings.transaction_storage.clone();
+            let mut cur_arbiter = actix_rt::Arbiter::current();
+            for (exchange, ex_settings) in settings.exchanges {
+                let strats: Vec<_> = settings.strategies.iter().filter(|st| st.exchange == exchange).cloned().collect();
+                if strats.is_empty() {
+                    continue;
+                }
+                let storage = storage::Transactions::new(&tx_storage, &mut cur_arbiter).await;
 
-                let tx_storage: String = settings.transaction_storage.clone();
                 actix_rt::Arbiter::spawn(async move {
-                    run_live(strat, exc_sett, &tx_storage).await;
+                    live::run_live(strats, storage, ex_settings).await;
                 });
                 actix::clock::delay_for(std::time::Duration::from_secs(5)).await;
             }
             actix_rt::Arbiter::local_join().await;
         }
     };
-}
-async fn run_live(strategy_settings: StrategySettings, exchange_settings: ExchangeSettings, storage_url: &str) {
-    let ticks: Vec<_> = vec![drivers::Tick {
-        sym: strategy_settings.symbol.clone(),
-        interval: strategy_settings.time_frame,
-    }];
-    let rest = drivers::create_rest_client(&strategy_settings.exchange, &exchange_settings).expect("in create_rest_client");
-    let sym_info = rest.get_symbol_info(&strategy_settings.symbol).await.expect("no symbol info");
-    let listen_key = rest.refresh_ws_token(None).await;
-    let live = drivers::create_live_driver(&strategy_settings.exchange, listen_key, ticks)
-        .await
-        .expect("could not create exchange drivers");
-    let strategy = strategies::create(
-        &strategy_settings.name,
-        strategy_settings.exchange,
-        sym_info,
-        strategy_settings.time_frame,
-        strategy_settings.settings,
-    )
-    .expect("strategies::create");
-    let mut cur_arbiter = actix_rt::Arbiter::current();
-    let storage = storage::Transactions::new(storage_url, &mut cur_arbiter).await;
-    live::run_live(strategy, rest, live, storage).await;
 }

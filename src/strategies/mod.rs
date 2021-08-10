@@ -18,7 +18,7 @@ pub use macd2::Macd2;
 pub enum Action {
     None,
     NewOrder(Order),
-    CancelOrder(u32),
+    CancelOrder(String, u32),
 }
 
 // a 1-symbol strategy
