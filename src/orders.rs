@@ -80,6 +80,8 @@ pub struct Transaction {
     pub avg_price: f64,
     pub volume: f64,
     pub tstamp: NaiveDateTime,
+    pub fees: f64,
+    pub fees_asset: String,
     pub order: Order,
 }
 impl Default for Transaction {
@@ -89,6 +91,8 @@ impl Default for Transaction {
             side: Side::Buy,
             avg_price: 0.0,
             volume: 0.0,
+            fees: 0.0,
+            fees_asset: String::new(),
             tstamp: chrono::naive::MAX_DATETIME, // the transaction that never happened it's in the future
             order: Order::default(),
         }

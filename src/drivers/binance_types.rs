@@ -250,11 +250,16 @@ pub(super) struct LiveOrderUpdate {
     order_price: String,
     #[serde(alias = "o")]
     order_type: Type,
+    #[serde(alias = "n")]
+    commission_amount: String,
+    #[serde(alias = "N")]
+    commission_asset: String,
 }
 impl From<LiveOrderUpdate> for orders::Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
+        let fees = msg.commission_amount.parse::<f64>().expect("in commission_asset");
         let mut id: u32 = 0;
         let mut tx_ref : u32 = 0;
         if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
@@ -269,6 +274,8 @@ impl From<LiveOrderUpdate> for orders::Transaction {
             side: msg.side.clone().into(),
             avg_price: tot_price / tot_quantity,
             volume: tot_quantity,
+            fees,
+            fees_asset: msg.commission_asset,
             order: orders::Order {
                 volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
                 exchange: String::from("binance"),

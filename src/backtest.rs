@@ -136,6 +136,8 @@ async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Can
         side: ord.side.clone(),
         order: ord.clone(),
         avg_price: last.open,
+        fees: 0.0,
+        fees_asset: ord.symbol.quote.clone(),
         volume: ord.volume,
         tstamp: last.tstamp,
     };

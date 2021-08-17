@@ -56,6 +56,7 @@ pub async fn run_live(
         .await
         .expect("could not create exchange drivers");
 
+    // main loop
     loop {
         let msg = feed.next().await;
         let action = match msg {
