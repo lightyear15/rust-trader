@@ -251,6 +251,8 @@ side varchar(16) NOT NULL,
 price float4 NOT NULL,
 volume float4 NOT NULL,
 id bigint NOT NULL,
+fees float4 NOT NULL,
+fees_asset varchar(16) NOT NULL
 reference bigint NULL,
 CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
 );
@@ -267,8 +269,8 @@ impl Transactions {
 
     pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
         let statement = format!(
-            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, reference)
-                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, {})",
+            "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, fees, fees_asset, reference)
+                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, {}, {}, {})",
             exchange,
             tx.symbol,
             tx.tstamp,
@@ -276,6 +278,8 @@ impl Transactions {
             tx.avg_price,
             tx.volume,
             tx.order.id,
+            tx.fees,
+            tx.fees_asset,
             tx.order.tx_ref,
         );
         self.client.execute(statement.as_str(), &[]).await

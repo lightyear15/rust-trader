@@ -37,7 +37,7 @@ pub async fn run_live(
         let t_frame = strategy.time_frame();
         ticks.push(Tick {
             sym: sym.clone(),
-            interval: t_frame.clone(),
+            interval: *t_frame,
         });
 
         let mut cnds = rest.get_candles(&sym, Some(t_frame), None, Some(hist_size)).await;
