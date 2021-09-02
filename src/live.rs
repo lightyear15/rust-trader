@@ -43,6 +43,7 @@ pub async fn run_live(
         let mut cnds = rest.get_candles(&sym, Some(t_frame), None, Some(hist_size)).await;
         cnds.sort_by_key(|cnd| std::cmp::Reverse(cnd.tstamp));
         let buffer = cnds.drain(0..hist_size).collect::<VecDeque<_>>();
+        info!("strategy {} on {} at {} started", strategy.name(), sym.clone(), t_frame);
         buffers.insert(sym.clone(), buffer);
         orders.insert(sym.clone(), Vec::new());
         strategies.insert(sym, strategy);

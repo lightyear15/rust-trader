@@ -50,21 +50,22 @@ pub fn create(
     }
 }
 
+// all values <= threshold, last is > threshold
 fn positive_cross(values: &[f64], threshold: f64) -> bool {
-    values.iter().take(values.len() - 1).all(|value| *value < threshold) && *values.last().unwrap() >= threshold
+    values.iter().take(values.len() - 1).all(|value| *value <= threshold) && *values.last().unwrap() > threshold
 }
-// all values negative, last 2 are positive
+// all values <= threshold, last 2 are > threshold
 fn confirmed_positive_cross(values: &[f64], threshold: f64) -> bool {
-    values.iter().take(values.len() - 2).all(|value| *value < threshold)
-        && values.iter().skip(values.len() - 2).all(|value| *value >= threshold)
+    values.iter().take(values.len() - 2).all(|value| *value <= threshold)
+        && values.iter().skip(values.len() - 2).all(|value| *value > threshold)
 }
 
-// all values positive, last is negative
+// all values >= threshold, last is < threshold
 fn negative_cross(values: &[f64], threshold: f64) -> bool {
-    values.iter().take(values.len() - 1).all(|value| *value > threshold) && *values.last().unwrap() <= threshold
+    values.iter().take(values.len() - 1).all(|value| *value >= threshold) && *values.last().unwrap() < threshold
 }
-// all values positive, last 2 are negative
+// all values >= threshold, last 2 are < threshold
 fn confirmed_negative_cross(values: &[f64], threshold: f64) -> bool {
-    values.iter().take(values.len() - 2).all(|value| *value > threshold)
-        && values.iter().skip(values.len() - 2).all(|value| *value <= threshold)
+    values.iter().take(values.len() - 2).all(|value| *value >= threshold)
+        && values.iter().skip(values.len() - 2).all(|value| *value < threshold)
 }

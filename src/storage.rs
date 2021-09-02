@@ -260,10 +260,12 @@ CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
 impl Transactions {
     pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
         let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
-        let f_ = connection.map_ok(|_x| ()).unwrap_or_else(|e| {
-            println!("error is {:?}", e);
+        let f = Box::pin(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {:?}", e);
+            }
         });
-        arbiter.send(f_);
+        arbiter.send(f);
         Self { client }
     }
 
