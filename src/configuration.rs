@@ -4,6 +4,12 @@ use std::collections::HashMap;
 pub struct ExchangeSettings {
     pub api_key: String,
     pub secret_key: String,
+    pub backtest: BacktestSettings,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct BacktestSettings {
+    fees_perc : f64,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]

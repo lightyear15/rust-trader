@@ -13,8 +13,8 @@ pub enum TimeInForce {
 pub enum Type {
     Market,
     Limit(f64),
+    StopLoss(f64),
     //TakeProfit(f64),
-    //StopLoss(f64),
     //StopLossLimit(f64, f64, TimeInForce),
     //TakeProfitLimit(f64, f64, TimeInForce),
 }

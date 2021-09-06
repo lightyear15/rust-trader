@@ -329,10 +329,12 @@ impl LiveFeed for Live {
 fn to_interval(interval: &Duration) -> String {
     if *interval == Duration::minutes(1) {
         String::from("1m")
-    } else if *interval == Duration::days(1) {
-        String::from("1d")
+    } else if *interval == Duration::minutes(15) {
+        String::from("15m")
     } else if *interval == Duration::hours(1) {
         String::from("1h")
+    } else if *interval == Duration::days(1) {
+        String::from("1d")
     } else {
         panic!("duration unknown")
     }
@@ -407,6 +409,15 @@ fn order_to_query(order: &orders::Order) -> Vec<(String, String)> {
             queries.push((
                 String::from("price"),
                 format!("{:.prec$}", norm_pr, prec = order.symbol.base_decimals),
+            ));
+            queries.push((String::from("timeInForce"), String::from("GTC")))
+        }
+        orders::Type::StopLoss(stop) => {
+            let norm_stop = normalize_it(stop, order.symbol.min_price, order.symbol.price_tick);
+            queries.push((String::from("type"), String::from("STOP_LOSS")));
+            queries.push((
+                String::from("stopPrice"),
+                format!("{:.prec$}", norm_stop, prec = order.symbol.base_decimals),
             ));
             queries.push((String::from("timeInForce"), String::from("GTC")))
         }

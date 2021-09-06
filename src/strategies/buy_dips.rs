@@ -58,13 +58,13 @@ impl SpotSinglePairStrategy for BuyDips {
         });
         let avg = total / volume;
         let current_price = history.first().expect("last candle").close;
-        if current_price < (avg / (1.0 + self.gain_factor)) {
+        if current_price < avg {
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
             order.symbol = self.sym.clone();
             order.side = Side::Buy;
-            order.o_type = Type::Market;
-            order.volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * self.gain_factor / current_price;
+            order.o_type = Type::Limit(avg);
+            order.volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * self.gain_factor / avg;
             order.expire = None;
             self.ongoing_ops += 1;
             return Action::NewOrder(order);

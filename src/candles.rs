@@ -1,6 +1,7 @@
+use chrono::{Duration, NaiveDateTime};
 use serde::Deserialize;
+use std::convert::TryFrom;
 use std::fmt;
-use chrono::{NaiveDateTime, Duration};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Candle {
@@ -11,7 +12,7 @@ pub struct Candle {
     pub close: f64,
     pub low: f64,
     pub high: f64,
-    pub volume :f64,
+    pub volume: f64,
 }
 
 impl fmt::Display for Candle {
@@ -32,4 +33,17 @@ where
 {
     let s: String = Deserialize::deserialize(deserializer)?;
     chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").map_err(serde::de::Error::custom)
+}
+
+impl TryFrom<&Candle> for ta::DataItem {
+    type Error = ta::errors::TaError;
+    fn try_from(c: &Candle) -> Result<Self, Self::Error> {
+        ta::DataItem::builder()
+            .open(c.open)
+            .close(c.close)
+            .low(c.low)
+            .high(c.high)
+            .volume(c.volume)
+            .build()
+    }
 }

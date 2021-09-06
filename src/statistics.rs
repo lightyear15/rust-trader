@@ -84,9 +84,6 @@ impl Statistics {
                 .expect("orig_tx");
             let perc = (tx.avg_price - orig_tx.avg_price) / orig_tx.avg_price;
             self.trade_win_loss.push(perc);
-            println!("order with ref {} -> {}", tx.order.id, tx.order.tx_ref);
-        } else {
-            println!("order without ref {}", tx.order.id);
         }
     }
     pub fn update_with_order(&mut self, _ord: &Order) {

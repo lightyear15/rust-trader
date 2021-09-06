@@ -9,10 +9,12 @@ pub mod buy_dips;
 pub mod sample;
 pub mod macd1;
 pub mod macd2;
+pub mod bbb_mfi_scalp;
 pub use buy_dips::BuyDips;
 pub use sample::Sample;
 pub use macd1::Macd1;
 pub use macd2::Macd2;
+pub use bbb_mfi_scalp::BBBMfiScalp;
 
 #[derive(Debug)]
 pub enum Action {
@@ -23,12 +25,15 @@ pub enum Action {
 
 // a 1-symbol strategy
 pub trait SpotSinglePairStrategy {
+    // history: 0 -> oldest candle
+    fn init(&mut self, _history: &[Candle]) { }
     fn name(&self) -> String;
-    // candles are handed in reverse order, i.e. last candle is first item in the slice
+    // history: 0 -> newest candle
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action;
     fn on_new_transaction(&mut self, outstanding_orders: &[Order], tx: &Transaction) -> Action;
 
     fn get_candles_history_size(&self) -> usize;
+    fn get_candles_init_size(&self) -> usize {0}
     fn exchange(&self) -> &str;
     fn symbol(&self) -> &Symbol;
     fn time_frame(&self) -> &chrono::Duration;
@@ -46,6 +51,7 @@ pub fn create(
         "buyDips" => Ok(Box::new(BuyDips::new(exch, sym, time_frame, settings))),
         "macd1" => Ok(Box::new(Macd1::new(exch, sym, time_frame, settings))),
         "macd2" => Ok(Box::new(Macd2::new(exch, sym, time_frame, settings))),
+        "bbbMfiScalp" => Ok(Box::new(BBBMfiScalp::new(exch, sym, time_frame, settings))),
         _ => Err(Error::ErrNotFound(format!("can't find strategy {}", strategy))),
     }
 }

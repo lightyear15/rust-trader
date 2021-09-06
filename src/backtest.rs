@@ -31,6 +31,27 @@ pub async fn backtest_spot_singlepair(
     let mut outstanding_orders: Vec<Order> = Vec::new();
     let mut transactions: Vec<Transaction> = Vec::new();
 
+    // strategy init
+    let init_cndl_size = strategy.get_candles_init_size();
+    if init_cndl_size > 0 {
+        let cnds = storage
+            .get(
+                strategy.exchange(),
+                &strategy.symbol().symbol,
+                &start_time,
+                &end_t,
+                strategy.time_frame(),
+                init_cndl_size,
+            )
+            .await;
+        if cnds.len() != init_cndl_size {
+            panic!("could not initialize the strategy");
+        }
+        strategy.init(cnds.as_slice());
+        tstamp += *(strategy.time_frame());
+        start_time = tstamp - (*(strategy.time_frame()) * init_cndl_size as i32);
+    }
+
     // performance tracking
     let mut stats = Statistics::new(STARTING_BALANCE);
 
@@ -123,6 +144,7 @@ fn order_in_candle(ord: &Order, last: &Candle) -> bool {
         (Type::Market, _) => true,
         (Type::Limit(buy_p), Side::Buy) => *buy_p >= last.low,
         (Type::Limit(sell_p), Side::Sell) => *sell_p <= last.high,
+        (Type::StopLoss(_), _) => unimplemented!("no stop Loss"),
         //(_, _) => false,
     }
 }
@@ -161,7 +183,8 @@ async fn generate_tx_from_order(ord: &Order, last: &Candle, store: &storage::Can
             tx.avg_price = *sell_p;
             tx.tstamp = t;
             Ok(tx)
-        } //(_, _) => Err(Error::Done),
+        } 
+        (Type::StopLoss(_), _) => unimplemented!("no stop Loss"),
     }
 }
 
