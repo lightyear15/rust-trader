@@ -31,16 +31,22 @@ pub async fn run_live(
     let mut ticks: Vec<Tick> = Vec::new();
     for st in strategies_settings {
         let sym_info = rest.get_symbol_info(&st.symbol).await.expect("no symbol info");
-        let strategy = strategies::create(&st.name, st.exchange, sym_info, st.time_frame, st.settings).expect("strategies::create");
+        let mut strategy = strategies::create(&st.name, st.exchange, sym_info, st.time_frame, st.settings).expect("strategies::create");
         let sym = strategy.symbol().symbol.clone();
+        let t_frame = *strategy.time_frame();
+        //init
+        let init_size = strategy.get_candles_init_size ();
+        let mut init_cnds = rest.get_candles(&sym, Some(&t_frame), None, Some(init_size)).await;
+        init_cnds.sort_by_key(|cnd| cnd.tstamp);
+        strategy.init(init_cnds.as_slice());
+        // runtime prep
         let hist_size = strategy.get_candles_history_size();
-        let t_frame = strategy.time_frame();
         ticks.push(Tick {
             sym: sym.clone(),
-            interval: *t_frame,
+            interval: t_frame,
         });
 
-        let mut cnds = rest.get_candles(&sym, Some(t_frame), None, Some(hist_size)).await;
+        let mut cnds = rest.get_candles(&sym, Some(&t_frame), None, Some(hist_size)).await;
         cnds.sort_by_key(|cnd| std::cmp::Reverse(cnd.tstamp));
         let buffer = cnds.drain(0..hist_size).collect::<VecDeque<_>>();
         info!("strategy {} on {} at {} started", strategy.name(), sym.clone(), t_frame);

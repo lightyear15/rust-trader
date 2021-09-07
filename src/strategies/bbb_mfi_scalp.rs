@@ -9,20 +9,19 @@ use log::debug;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use ta::indicators::{BollingerBands, MoneyFlowIndex};
-use ta::{DataItem, Next, Reset};
+use ta::{DataItem, Next, Period, Reset};
 
 const CAPITAL: f64 = 0.1;
+const GAIN: f64 = 1.01;
 
 #[derive(Clone)]
 pub struct BBBMfiScalp {
     mfi: MoneyFlowIndex,
     bbb: BollingerBands,
-    last_tx: Option<Transaction>,
 
     exchange: String,
     sym: Symbol,
     time_frame: chrono::Duration,
-    history_len: usize,
 }
 
 impl BBBMfiScalp {
@@ -42,16 +41,13 @@ impl BBBMfiScalp {
             .expect("no bbb_multiplier key")
             .parse::<f64>()
             .expect("bbb_multiplier must be f64");
-        let history_len = std::cmp::max(mfi_period, bbb_size);
         Self {
             bbb: BollingerBands::new(bbb_size, bbb_multiplier).unwrap(),
             mfi: MoneyFlowIndex::new(mfi_period).unwrap(),
-            last_tx: None,
 
             exchange,
             sym,
             time_frame,
-            history_len,
         }
     }
 }
@@ -67,14 +63,14 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
     }
 
     fn get_candles_init_size(&self) -> usize {
-        self.history_len
+        std::cmp::max(self.bbb.period(), self.mfi.period())
     }
 
     fn init(&mut self, history: &[Candle]) {
         self.bbb.reset();
         self.mfi.reset();
         for cnd in history {
-            println!("giulio - init candle {:?}", cnd);
+            debug!("giulio - init candle {:?}", cnd);
             let item: DataItem = cnd.try_into().unwrap();
             self.bbb.next(&item);
             self.mfi.next(&item);
@@ -82,7 +78,7 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
     }
 
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action {
-        println!("giulio - on_new_candle candle {:?}", history);
+        debug!("giulio - on_new_candle candle {:?}", history);
         let cnd = history.first().unwrap();
         let item: DataItem = cnd.try_into().unwrap();
         let price = cnd.close;
@@ -92,24 +88,7 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
         if !outstanding_orders.is_empty() {
             return Action::None;
         }
-        if let Some(tx) = self.last_tx.as_ref() {
-            let diff = cnd.tstamp - tx.tstamp;
-            if diff > Duration::days(1) {
-                let mut order = Order::new();
-                order.exchange = self.exchange.clone();
-                order.symbol = self.sym.clone();
-                order.side = Side::Sell;
-                order.o_type = Type::Limit(tx.avg_price * 1.01);
-                order.volume = tx.volume * 0.99;
-            } else if price > bbb.upper && mfi > 80.0 {
-                let mut order = Order::new();
-                order.exchange = self.exchange.clone();
-                order.symbol = self.sym.clone();
-                order.side = Side::Sell;
-                order.o_type = Type::Limit(price);
-                order.volume = tx.volume.min(tx.avg_price * tx.volume / price);
-            }
-        } else if price < bbb.lower && mfi < 20.0 {
+        if price < bbb.lower && mfi < 20.0 {
             let volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * CAPITAL / price;
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
@@ -117,17 +96,27 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
             order.side = Side::Buy;
             order.o_type = Type::Market;
             order.volume = volume;
+            Action::NewOrder(order)
+        } else {
+            Action::None
         }
-        Action::None
     }
 
     fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action {
         if matches!(tx.side, Side::Buy) {
-            self.last_tx = Some(tx.clone());
+            let price = tx.avg_price * GAIN;
+            let volume = tx.volume / GAIN;
+            let mut order = Order::new();
+            order.exchange = self.exchange.clone();
+            order.symbol = self.sym.clone();
+            order.side = Side::Sell;
+            order.o_type = Type::Limit(price);
+            order.volume = volume;
+            order.tx_ref = tx.order.id;
+            Action::NewOrder(order)
         } else {
-            self.last_tx = None;
+            Action::None
         }
-        Action::None
     }
 
     fn get_candles_history_size(&self) -> usize {
