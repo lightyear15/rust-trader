@@ -253,7 +253,7 @@ pub(super) struct LiveOrderUpdate {
     #[serde(alias = "n")]
     commission_amount: String,
     #[serde(alias = "N")]
-    commission_asset: String,
+    commission_asset: Option<String>,
 }
 impl From<LiveOrderUpdate> for orders::Transaction {
     fn from(msg: LiveOrderUpdate) -> Self {
@@ -275,7 +275,7 @@ impl From<LiveOrderUpdate> for orders::Transaction {
             avg_price: tot_price / tot_quantity,
             volume: tot_quantity,
             fees,
-            fees_asset: msg.commission_asset,
+            fees_asset: msg.commission_asset.unwrap_or_default(),
             order: orders::Order {
                 volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
                 exchange: String::from("binance"),

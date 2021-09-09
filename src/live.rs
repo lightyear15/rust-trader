@@ -31,14 +31,20 @@ pub async fn run_live(
     let mut ticks: Vec<Tick> = Vec::new();
     for st in strategies_settings {
         let sym_info = rest.get_symbol_info(&st.symbol).await.expect("no symbol info");
-        let mut strategy = strategies::create(&st.name, st.exchange, sym_info, st.time_frame, st.settings).expect("strategies::create");
+        let mut strategy =
+            strategies::create(&st.name, st.exchange, sym_info, st.time_frame, st.settings).expect("strategies::create");
         let sym = strategy.symbol().symbol.clone();
         let t_frame = *strategy.time_frame();
         //init
-        let init_size = strategy.get_candles_init_size ();
-        let mut init_cnds = rest.get_candles(&sym, Some(&t_frame), None, Some(init_size)).await;
-        init_cnds.sort_by_key(|cnd| cnd.tstamp);
-        strategy.init(init_cnds.as_slice());
+        let init_size = strategy.get_candles_init_size();
+        if init_size == 0 {
+            info!("{}: no init needed ", strategy.name());
+        } else {
+            let mut init_cnds = rest.get_candles(&sym, Some(&t_frame), None, Some(init_size)).await;
+            init_cnds.sort_by_key(|cnd| cnd.tstamp);
+            strategy.initialize(init_cnds.as_slice());
+            info!("{}: init needed {} - {}", strategy.name(), init_size, init_cnds.len());
+        }
         // runtime prep
         let hist_size = strategy.get_candles_history_size();
         ticks.push(Tick {
@@ -128,7 +134,7 @@ pub async fn run_live(
                 feed.reconnect(new_token).await;
                 Action::None
             }
-            _ => { 
+            _ => {
                 warn!("unknown  event");
                 Action::None
             }

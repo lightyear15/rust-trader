@@ -47,7 +47,7 @@ pub async fn backtest_spot_singlepair(
         if cnds.len() != init_cndl_size {
             panic!("could not initialize the strategy");
         }
-        strategy.init(cnds.as_slice());
+        strategy.initialize(cnds.as_slice());
         tstamp += *(strategy.time_frame());
         start_time = tstamp - (*(strategy.time_frame()) * init_cndl_size as i32);
     }

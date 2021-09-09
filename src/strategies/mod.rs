@@ -4,17 +4,18 @@ use crate::orders::{Order, Side, Transaction, Type};
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
 use std::collections::HashMap;
+use log::info;
 
+pub mod bbb_mfi_scalp;
 pub mod buy_dips;
-pub mod sample;
 pub mod macd1;
 pub mod macd2;
-pub mod bbb_mfi_scalp;
+pub mod sample;
+pub use bbb_mfi_scalp::BBBMfiScalp;
 pub use buy_dips::BuyDips;
-pub use sample::Sample;
 pub use macd1::Macd1;
 pub use macd2::Macd2;
-pub use bbb_mfi_scalp::BBBMfiScalp;
+pub use sample::Sample;
 
 #[derive(Debug)]
 pub enum Action {
@@ -26,14 +27,18 @@ pub enum Action {
 // a 1-symbol strategy
 pub trait SpotSinglePairStrategy {
     // history: 0 -> oldest candle
-    fn init(&mut self, _history: &[Candle]) { }
+    fn initialize(&mut self, _history: &[Candle]) {
+        info!("default to no initialization");
+    }
     fn name(&self) -> String;
     // history: 0 -> newest candle
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action;
     fn on_new_transaction(&mut self, outstanding_orders: &[Order], tx: &Transaction) -> Action;
 
     fn get_candles_history_size(&self) -> usize;
-    fn get_candles_init_size(&self) -> usize {0}
+    fn get_candles_init_size(&self) -> usize {
+        0
+    }
     fn exchange(&self) -> &str;
     fn symbol(&self) -> &Symbol;
     fn time_frame(&self) -> &chrono::Duration;

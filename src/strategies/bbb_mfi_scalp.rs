@@ -66,11 +66,11 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
         std::cmp::max(self.bbb.period(), self.mfi.period())
     }
 
-    fn init(&mut self, history: &[Candle]) {
+    fn initialize(&mut self, history: &[Candle]) {
+        debug!("BBBMfiScalp::init with {} candles", history.len());
         self.bbb.reset();
         self.mfi.reset();
         for cnd in history {
-            debug!("giulio - init candle {:?}", cnd);
             let item: DataItem = cnd.try_into().unwrap();
             self.bbb.next(&item);
             self.mfi.next(&item);
@@ -78,7 +78,7 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
     }
 
     fn on_new_candle(&mut self, wallet: &SpotWallet, outstanding_orders: &[Order], history: &[Candle]) -> Action {
-        debug!("giulio - on_new_candle candle {:?}", history);
+        debug!("on_new_candle with history depth - {} ", history.len());
         let cnd = history.first().unwrap();
         let item: DataItem = cnd.try_into().unwrap();
         let price = cnd.close;

@@ -100,14 +100,15 @@ impl RestApi for Rest {
     async fn get_candles(
         &self,
         sym: &str,
-        interval: Option<&Duration>,
+        maybe_interval: Option<&Duration>,
         start: Option<&NaiveDateTime>,
         limit: Option<usize>,
     ) -> Vec<candles::Candle> {
+        let interval = *maybe_interval.unwrap_or(&Duration::minutes(1));
         let mut queries: Vec<(String, String)> =
             start.map_or(Vec::new(), |st| vec![(String::from("startTime"), format!("{}000", st.timestamp()))]);
         queries.push((String::from("symbol"), String::from(sym)));
-        queries.push((String::from("interval"), to_interval(interval.unwrap_or(&Duration::minutes(1)))));
+        queries.push((String::from("interval"), to_interval(&interval)));
         queries.push((String::from("limit"), limit.unwrap_or(1000).to_string()));
         let url = self.url.clone() + "/api/v3/klines";
         let request = self.client.get(url).query(&queries).expect("in adding queries");
@@ -118,7 +119,14 @@ impl RestApi for Rest {
             .await
             .expect("in json<Vec<Candle>>")
             .drain(0..)
-            .map(|cnd| cnd.into())
+            .filter_map(|cnd| {
+                let candle = candles::Candle::from(cnd);
+                if candle.tframe < interval {
+                    None
+                } else {
+                    Some(candle)
+                }
+            })
             .collect()
     }
 
