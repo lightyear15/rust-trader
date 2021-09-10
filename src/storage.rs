@@ -3,6 +3,7 @@ use super::orders::Transaction;
 use chrono::{Duration, NaiveDateTime};
 use futures_util::TryFutureExt;
 use tokio_postgres::{row, Client, Error, NoTls};
+use log::debug;
 
 pub struct Candles {
     client: Client,
@@ -272,7 +273,7 @@ impl Transactions {
     pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
         let statement = format!(
             "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, fees, fees_asset, reference)
-                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, {}, {}, {})",
+                                VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, {}, '{}', {})",
             exchange,
             tx.symbol,
             tx.tstamp,
@@ -284,6 +285,7 @@ impl Transactions {
             tx.fees_asset,
             tx.order.tx_ref,
         );
+        debug!("Transaction::store - {}", statement);
         self.client.execute(statement.as_str(), &[]).await
     }
 }
