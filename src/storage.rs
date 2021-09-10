@@ -2,8 +2,10 @@ use super::candles;
 use super::orders::Transaction;
 use chrono::{Duration, NaiveDateTime};
 use futures_util::TryFutureExt;
-use tokio_postgres::{row, Client, Error, NoTls};
 use log::debug;
+use tokio_postgres::{row, tls, Client, Error, NoTls, Socket};
+
+type Connection = tokio_postgres::Connection<Socket, <NoTls as tls::MakeTlsConnect<Socket>>::Stream>;
 
 pub struct Candles {
     client: Client,
@@ -135,11 +137,11 @@ impl Candles {
         price: f64,
     ) -> Option<chrono::NaiveDateTime> {
         let statement = format!(
-            "SELECT tstamp 
-            FROM {exchange} 
-            WHERE symbol = '{symbol}' 
-                AND low <= {price} 
-                AND tstamp BETWEEN '{start_time}' AND '{end_time}' 
+            "SELECT tstamp
+            FROM {exchange}
+            WHERE symbol = '{symbol}'
+                AND low <= {price}
+                AND tstamp BETWEEN '{start_time}' AND '{end_time}'
             ORDER BY tstamp LIMIT 1",
             exchange = exc,
             symbol = sym,
@@ -164,11 +166,11 @@ impl Candles {
         price: f64,
     ) -> Option<chrono::NaiveDateTime> {
         let statement = format!(
-            "SELECT tstamp 
-            FROM {exchange} 
-            WHERE symbol = '{symbol}' 
-                AND high >= {price} 
-                AND tstamp BETWEEN '{start_time}' AND '{end_time}' 
+            "SELECT tstamp
+            FROM {exchange}
+            WHERE symbol = '{symbol}'
+                AND high >= {price}
+                AND tstamp BETWEEN '{start_time}' AND '{end_time}'
             ORDER BY tstamp LIMIT 1",
             exchange = exc,
             symbol = sym,
@@ -240,7 +242,9 @@ fn group_candles(cnds: &[candles::Candle]) -> candles::Candle {
 }
 
 pub struct Transactions {
+    host: String,
     client: Client,
+    sender: std::sync::mpsc::Sender<Connection>,
 }
 
 /*
@@ -260,17 +264,25 @@ CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
 */
 impl Transactions {
     pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
-        let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
+        let (sender, receiver) = std::sync::mpsc::channel::<Connection>();
         let f = Box::pin(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {:?}", e);
+            for connection in receiver {
+                if let Err(e) = connection.await {
+                    eprintln!("connection error: {:?}", e);
+                }
             }
         });
         arbiter.send(f);
-        Self { client }
+        let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
+        sender.send(connection).unwrap();
+        Self {
+            host: String::from(host),
+            client,
+            sender,
+        }
     }
 
-    pub async fn store(&self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
+    pub async fn store(&mut self, exchange: &str, tx: &Transaction) -> Result<u64, Error> {
         let statement = format!(
             "INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, fees, fees_asset, reference)
                                 VALUES ('{}', '{}', '{}', '{}', {}, {}, {}, {}, '{}', {})",
@@ -285,6 +297,11 @@ impl Transactions {
             tx.fees_asset,
             tx.order.tx_ref,
         );
+        if self.client.is_closed() {
+            let (client, connection) = tokio_postgres::connect(&self.host, NoTls).await.expect("when connecting to postgres");
+            self.sender.send(connection).unwrap();
+            self.client = client;
+        }
         debug!("Transaction::store - {}", statement);
         self.client.execute(statement.as_str(), &[]).await
     }

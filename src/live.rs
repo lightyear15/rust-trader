@@ -12,7 +12,7 @@ use std::iter::Extend;
 
 pub async fn run_live(
     strategies_settings: Vec<StrategySettings>,
-    tx_storage: storage::Transactions,
+    mut tx_storage: storage::Transactions,
     exchange_settings: ExchangeSettings,
 ) {
     if strategies_settings.is_empty() {
