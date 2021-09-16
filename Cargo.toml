@@ -8,29 +8,29 @@ edition = "2018"
 
 [dependencies]
 bytes = {version = "0.5"}
-log = {version = "0.4"}
+log = {version = "0"}
 log4rs = {version = "1"}
-config = {version = "0.11"}
+config = {version = "0"}
 serde = {version = "1", features = ["derive", "std"]}
 serde_json = {version = "1"}
 serde_qs = {version = "0"}
-rand = {version = "0.8"}
-chrono = {version = "0.4", features = ["serde"]}
-structopt = { version = "0.3", default-features = false }
+rand = {version = "0"}
+chrono = {version = "0", features = ["serde"]}
+structopt = { version = "0", default-features = false }
 tokio-postgres = {version = "0.5", features = ["with-chrono-0_4", "runtime"]}
-async-trait = {version = "0.1"}
+async-trait = {version = "0"}
 humantime-serde = {version = "1"}
 humantime = {version = "2"}
-futures-util = {version = "0.3"}
-actix-web = {version = "3.3"}
-actix-rt = {version = "1.1"}
+futures-util = {version = "0"}
+actix-web = {version = "3"}
+actix-rt = {version = "1"}
 actix-codec = {version = "0.3"}
-actix = {version = "0.10"}
+actix = {version = "0"}
 actix-web-actors = {version = "3"}
 awc = {version = "2", features = ["openssl"]}
-openssl = {version = "0.10", features = ["vendored"]}
-openssl-sys = {version = "0.9"}
-openssl-probe = {version = "0.1"}
-progress = {version = "0.2.0"}
+openssl = {version = "0", features = ["vendored"]}
+openssl-sys = {version = "0"}
+openssl-probe = {version = "0"}
+progress = {version = "0"}
 ta = {version = "0"}
 scan_fmt = {version = "0"}

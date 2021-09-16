@@ -102,7 +102,7 @@ async fn main() {
                 actix_rt::Arbiter::spawn(async move {
                     live::run_live(strats, storage, ex_settings).await;
                 });
-                actix::clock::delay_for(std::time::Duration::from_secs(5)).await;
+                actix_rt::time::delay_for(std::time::Duration::from_secs(5)).await;
             }
             actix_rt::Arbiter::local_join().await;
         }

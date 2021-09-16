@@ -2,7 +2,8 @@ use super::candles;
 use super::orders::Transaction;
 use chrono::{Duration, NaiveDateTime};
 use futures_util::TryFutureExt;
-use log::debug;
+use log::{debug, error};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use tokio_postgres::{row, tls, Client, Error, NoTls, Socket};
 
 type Connection = tokio_postgres::Connection<Socket, <NoTls as tls::MakeTlsConnect<Socket>>::Stream>;
@@ -264,11 +265,18 @@ CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
 */
 impl Transactions {
     pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
-        let (sender, receiver) = std::sync::mpsc::channel::<Connection>();
+        let (sender, receiver) = channel::<Connection>();
         let f = Box::pin(async move {
-            for connection in receiver {
-                if let Err(e) = connection.await {
-                    eprintln!("connection error: {:?}", e);
+            loop {
+                let elem = receiver.try_recv();
+                match elem {
+                    Ok(connection) => {
+                        error!("connection {:?}", connection.await);
+                    }
+                    Err(TryRecvError::Empty) => {
+                        actix_rt::time::delay_for(std::time::Duration::from_secs(20)).await;
+                    }
+                    Err(TryRecvError::Disconnected) => return,
                 }
             }
         });
@@ -298,7 +306,9 @@ impl Transactions {
             tx.order.tx_ref,
         );
         if self.client.is_closed() {
-            let (client, connection) = tokio_postgres::connect(&self.host, NoTls).await.expect("when connecting to postgres");
+            let (client, connection) = tokio_postgres::connect(&self.host, NoTls)
+                .await
+                .expect("when connecting to postgres");
             self.sender.send(connection).unwrap();
             self.client = client;
         }
