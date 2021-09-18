@@ -261,15 +261,21 @@ impl From<LiveOrderUpdate> for orders::Transaction {
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
         let fees = msg.commission_amount.parse::<f64>().expect("in commission_asset");
         let mut id: u32 = 0;
-        let mut tx_ref : u32 = 0;
+        let mut tx_ref: u32 = 0;
         if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
             id = sc_id;
             tx_ref = sc_tx_ref;
         } else if let Ok(sc_id) = msg.order_id.parse::<u32>() {
             id = sc_id;
         }
+        let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
+        let order_tstamp = if matches!(msg.order_status, OrderStatus::New) {
+            Some(tstamp)
+        } else {
+            None
+        };
         Self {
-            tstamp: NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0),
+            tstamp,
             symbol: msg.symbol.clone(),
             side: msg.side.clone().into(),
             avg_price: tot_price / tot_quantity,
@@ -277,6 +283,7 @@ impl From<LiveOrderUpdate> for orders::Transaction {
             fees,
             fees_asset: msg.commission_asset.unwrap_or_default(),
             order: orders::Order {
+                tstamp: order_tstamp,
                 volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
                 exchange: String::from("binance"),
                 expire: None,

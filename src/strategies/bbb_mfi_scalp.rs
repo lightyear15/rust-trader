@@ -4,7 +4,7 @@ use crate::strategies::{Action, SpotSinglePairStrategy};
 use crate::symbol::Symbol;
 use crate::wallets::SpotWallet;
 
-use chrono::Duration;
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use log::debug;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -18,6 +18,8 @@ const GAIN: f64 = 1.01;
 pub struct BBBMfiScalp {
     mfi: MoneyFlowIndex,
     bbb: BollingerBands,
+    max_outstanding_orders : usize,
+    starting_time: chrono::NaiveDateTime,
 
     exchange: String,
     sym: Symbol,
@@ -41,9 +43,16 @@ impl BBBMfiScalp {
             .expect("no bbb_multiplier key")
             .parse::<f64>()
             .expect("bbb_multiplier must be f64");
+        let max_outstanding_orders = settings
+            .get("max_outstanding_orders")
+            .expect("no max_outstanding_orders key")
+            .parse::<usize>()
+            .expect("max_outstanding_orders must be usize");
         Self {
             bbb: BollingerBands::new(bbb_size, bbb_multiplier).unwrap(),
             mfi: MoneyFlowIndex::new(mfi_period).unwrap(),
+            max_outstanding_orders, 
+            starting_time: DateTime::<Utc>::from(std::time::SystemTime::now()).naive_utc(),
 
             exchange,
             sym,
@@ -85,7 +94,10 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
         let bbb = self.bbb.next(&item);
         let mfi = self.mfi.next(&item);
 
-        if !outstanding_orders.is_empty() {
+        let youngest_order = outstanding_orders.last().map(|o| o.tstamp).flatten().unwrap_or(self.starting_time);
+
+        if  outstanding_orders.len() > self.max_outstanding_orders &&
+            cnd.tstamp - youngest_order <  chrono::Duration::hours(12) {
             return Action::None;
         }
         if price < bbb.lower && mfi < 20.0 {

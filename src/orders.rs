@@ -44,6 +44,7 @@ pub enum OrderStatus {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Order {
+    pub tstamp: Option<NaiveDateTime>,
     pub exchange: String,
     pub symbol: Symbol,
     pub side: Side,
@@ -56,13 +57,14 @@ pub struct Order {
 impl Order {
     pub fn new() -> Self {
         Self {
+            tstamp : None,
             exchange: String::new(),
             symbol: Symbol::default(),
             side: Side::Buy,
             o_type: Type::Market,
             volume: 0.0,
             expire: None,
-            id: random(),
+            id: random::<u16>() as u32,
             tx_ref : 0,
         }
     }
