@@ -5,6 +5,7 @@ use crate::wallets::SpotWallet;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use scan_fmt::scan_fmt;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 #[derive(Debug, serde::Deserialize, Clone)]
 #[serde(tag = "filterType")]
@@ -227,39 +228,40 @@ impl From<LiveCandle> for candles::Candle {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 pub(super) struct LiveOrderUpdate {
-    #[serde(alias = "E")]
+    #[serde(alias = "E", alias = "time")]
     tstamp: u64,
     #[serde(alias = "s")]
     symbol: String,
-    #[serde(alias = "c")]
+    #[serde(alias = "c", alias = "clientOrderId")]
     order_id: String,
-    #[serde(alias = "X")]
+    #[serde(alias = "X", alias = "status")]
     pub order_status: OrderStatus,
     #[serde(alias = "S")]
     side: Side,
-    #[serde(alias = "Z")]
+    #[serde(alias = "Z", default)]
     cumulative_price: String,
-    #[serde(alias = "z")]
+    #[serde(alias = "z", alias = "cumulativeQuoteQty")]
     cumulative_quantity: String,
     // order related stuff
-    #[serde(alias = "q")]
+    #[serde(alias = "q", alias = "origQty")]
     order_quantity: String,
-    #[serde(alias = "p")]
+    #[serde(alias = "p", alias = "price")]
     order_price: String,
-    #[serde(alias = "o")]
+    #[serde(alias = "o", alias = "type")]
     order_type: Type,
-    #[serde(alias = "n")]
+    #[serde(alias = "n", default)]
     commission_amount: String,
-    #[serde(alias = "N")]
+    #[serde(alias = "N", default)]
     commission_asset: Option<String>,
 }
-impl From<LiveOrderUpdate> for orders::Transaction {
-    fn from(msg: LiveOrderUpdate) -> Self {
-        let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
-        let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
-        let fees = msg.commission_amount.parse::<f64>().expect("in commission_asset");
+impl TryFrom<LiveOrderUpdate> for orders::Transaction {
+    type Error = String;
+    fn try_from(msg: LiveOrderUpdate) -> Result<Self, Self::Error> {
+        if matches!(msg.order_status, OrderStatus::Filled) == false {
+            return Err(String::from("order not filled"));
+        }
         let mut id: u32 = 0;
         let mut tx_ref: u32 = 0;
         if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
@@ -267,33 +269,66 @@ impl From<LiveOrderUpdate> for orders::Transaction {
             tx_ref = sc_tx_ref;
         } else if let Ok(sc_id) = msg.order_id.parse::<u32>() {
             id = sc_id;
-        }
-        let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
-        let order_tstamp = if matches!(msg.order_status, OrderStatus::New) {
-            Some(tstamp)
         } else {
-            None
-        };
-        Self {
-            tstamp,
-            symbol: msg.symbol.clone(),
+            return Err(String::from("no order IDs"));
+        }
+        let order = orders::Order {
+            tstamp: None,
+            volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
+            exchange: String::from("binance"),
+            expire: None,
             side: msg.side.clone().into(),
+            symbol: Symbol::new(msg.symbol.clone()),
+            id,
+            o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
+            tx_ref,
+        };
+        let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
+        let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
+        let fees = msg.commission_amount.parse::<f64>().expect("in commission_asset");
+        let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
+        let s = Self {
+            tstamp,
+            symbol: msg.symbol,
+            side: msg.side.into(),
             avg_price: tot_price / tot_quantity,
             volume: tot_quantity,
             fees,
             fees_asset: msg.commission_asset.unwrap_or_default(),
-            order: orders::Order {
-                tstamp: order_tstamp,
-                volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
-                exchange: String::from("binance"),
-                expire: None,
-                side: msg.side.into(),
-                symbol: Symbol::new(msg.symbol),
-                id,
-                o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
-                tx_ref,
-            },
+            order,
+        };
+        Ok(s)
+    }
+}
+impl TryFrom<LiveOrderUpdate> for orders::Order {
+    type Error = String;
+    fn try_from(msg: LiveOrderUpdate) -> Result<Self, Self::Error> {
+        if matches!(msg.order_status, OrderStatus::New) == false {
+            return Err(String::from("order not new"));
         }
+        let mut id: u32 = 0;
+        let mut tx_ref: u32 = 0;
+        if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
+            id = sc_id;
+            tx_ref = sc_tx_ref;
+        } else if let Ok(sc_id) = msg.order_id.parse::<u32>() {
+            id = sc_id;
+        } else {
+            return Err(String::from("no order IDs"));
+        }
+        let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
+        let order = orders::Order {
+            tstamp: Some(tstamp),
+            volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
+            exchange: String::from("binance"),
+            expire: None,
+            side: msg.side.clone().into(),
+            symbol: Symbol::new(msg.symbol.clone()),
+            id,
+            o_type: to_type(&msg.order_type, msg.order_price.parse::<f64>().expect("in msg.order_price")),
+            tx_ref,
+        };
+        Ok(order)
     }
 }
 
@@ -391,7 +426,7 @@ pub(super) enum Type {
     StopLoss,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 pub(super) enum OrderStatus {
     #[serde(alias = "NEW")]
     New,

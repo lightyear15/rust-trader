@@ -57,7 +57,7 @@ pub async fn run_live(
         let buffer = cnds.drain(0..hist_size).collect::<VecDeque<_>>();
         info!("strategy {} on {} at {} started", strategy.name(), sym.clone(), t_frame);
         buffers.insert(sym.clone(), buffer);
-        orders.insert(sym.clone(), Vec::new());
+        orders.insert(sym.clone(), rest.get_outstanding_orders(&sym).await);
         strategies.insert(sym, strategy);
     }
     // init wallet

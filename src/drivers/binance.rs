@@ -18,6 +18,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 use super::binance_types::*;
 
@@ -185,6 +186,35 @@ impl RestApi for Rest {
                 .map_or_else(|err| format!("Error {:?}", err), |body| format!("body {:?}", body));
             orders::OrderStatus::Rejected(bd)
         }
+    }
+    async fn get_outstanding_orders(&self, symbol: &str) -> Vec<orders::Order> {
+        let url = self.url.clone() + "/api/v3/openOrders";
+        let tstamp_str = format!("{}", Utc::now().timestamp_millis());
+        let mut queries: Vec<(&str, &str)> = vec![("symbol", symbol), ("timestamp", &tstamp_str)];
+        let mut request = self.client.post(url).query(&queries).expect("in adding queries");
+        let query_str = request.get_uri().query().expect("no query?");
+        let signature = Signer::new(MessageDigest::sha256(), &self.secret)
+            .expect("in creating the signer")
+            .sign_oneshot_to_vec(query_str.as_bytes())
+            .expect("in digesting body")
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<Vec<_>>()
+            .join("");
+        queries.push(("signature", &signature));
+        request = request.query(&queries).expect("in setting queries with signature");
+        let lives: Vec<orders::Order> = request
+            .send()
+            .await
+            .expect("in send binance outstanding orders request")
+            .json::<Vec<LiveOrderUpdate>>()
+            .limit(128_000_000)
+            .await
+            .expect("in json::<AccountStatus>")
+            .into_iter()
+            .filter_map(|live_update| live_update.try_into().ok())
+            .collect();
+        lives
     }
 
     async fn cancel_order(&self, symbol: String, order_id: u32) -> orders::OrderStatus {
@@ -366,16 +396,13 @@ fn interpret_message(mesg: LiveMessage) -> Option<LiveEvent> {
             }
         }
         LiveMessageType::OrderUpdate(tx_msg) => {
-            match tx_msg.order_status {
-                OrderStatus::Filled => {
-                    return Some(LiveEvent::Transaction(tx_msg.into()));
-                }
-                OrderStatus::New => {
-                    let tx: orders::Transaction = tx_msg.into();
-                    return Some(LiveEvent::NewOrder(tx.order));
-                }
-                _ => {}
-            };
+            if let Ok(tx) = tx_msg.clone().try_into() {
+                return Some(LiveEvent::Transaction(tx));
+            } else if let Ok(order) = tx_msg.try_into() {
+                return Some(LiveEvent::NewOrder(order));
+            } else {
+                return None;
+            }
         }
         LiveMessageType::AccountUpdate(account_msg) => {
             return Some(LiveEvent::BalanceUpdate(account_msg.into()));
