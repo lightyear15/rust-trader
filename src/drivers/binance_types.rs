@@ -237,14 +237,13 @@ pub(super) struct LiveOrderUpdate {
     #[serde(alias = "c", alias = "clientOrderId")]
     order_id: String,
     #[serde(alias = "X", alias = "status")]
-    pub order_status: OrderStatus,
+    order_status: OrderStatus,
     #[serde(alias = "S")]
     side: Side,
     #[serde(alias = "Z", default)]
     cumulative_price: String,
-    #[serde(alias = "z", alias = "cumulativeQuoteQty")]
+    #[serde(alias = "z", alias = "cummulativeQuoteQty")]
     cumulative_quantity: String,
-    // order related stuff
     #[serde(alias = "q", alias = "origQty")]
     order_quantity: String,
     #[serde(alias = "p", alias = "price")]
@@ -262,16 +261,15 @@ impl TryFrom<LiveOrderUpdate> for orders::Transaction {
         if matches!(msg.order_status, OrderStatus::Filled) == false {
             return Err(String::from("order not filled"));
         }
-        let mut id: u32 = 0;
-        let mut tx_ref: u32 = 0;
-        if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
-            id = sc_id;
-            tx_ref = sc_tx_ref;
+        //let mut id: u32 = 0;
+        //let mut tx_ref: u32 = 0;
+        let (id, tx_ref) = if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
+            (sc_id, sc_tx_ref)
         } else if let Ok(sc_id) = msg.order_id.parse::<u32>() {
-            id = sc_id;
+            (sc_id, 0)
         } else {
             return Err(String::from("no order IDs"));
-        }
+        };
         let order = orders::Order {
             tstamp: None,
             volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),
@@ -306,16 +304,13 @@ impl TryFrom<LiveOrderUpdate> for orders::Order {
         if matches!(msg.order_status, OrderStatus::New) == false {
             return Err(String::from("order not new"));
         }
-        let mut id: u32 = 0;
-        let mut tx_ref: u32 = 0;
-        if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
-            id = sc_id;
-            tx_ref = sc_tx_ref;
+        let (id, tx_ref) = if let Ok((sc_id, sc_tx_ref)) = scan_fmt!(&msg.order_id, "{d}_{d}", u32, u32) {
+            (sc_id, sc_tx_ref)
         } else if let Ok(sc_id) = msg.order_id.parse::<u32>() {
-            id = sc_id;
+            (sc_id, 0)
         } else {
             return Err(String::from("no order IDs"));
-        }
+        };
         let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
         let order = orders::Order {
             tstamp: Some(tstamp),

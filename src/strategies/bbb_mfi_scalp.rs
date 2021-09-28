@@ -52,7 +52,7 @@ impl BBBMfiScalp {
             bbb: BollingerBands::new(bbb_size, bbb_multiplier).unwrap(),
             mfi: MoneyFlowIndex::new(mfi_period).unwrap(),
             max_outstanding_orders, 
-            starting_time: DateTime::<Utc>::from(std::time::SystemTime::now()).naive_utc(),
+            starting_time: NaiveDateTime::from_timestamp(0, 0),
 
             exchange,
             sym,
@@ -94,12 +94,15 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
         let bbb = self.bbb.next(&item);
         let mfi = self.mfi.next(&item);
 
+        // rate limiter
+        if  outstanding_orders.len() > self.max_outstanding_orders {
+            return Action::None;
+        } 
         let youngest_order = outstanding_orders.last().map(|o| o.tstamp).flatten().unwrap_or(self.starting_time);
-
-        if  outstanding_orders.len() > self.max_outstanding_orders &&
-            cnd.tstamp - youngest_order <  chrono::Duration::hours(12) {
+        if cnd.tstamp - youngest_order <  chrono::Duration::hours(12) {
             return Action::None;
         }
+        //decision making
         if price < bbb.lower && mfi < 20.0 {
             let volume = wallet.assets.get(&self.sym.quote).unwrap_or(&0.0) * CAPITAL / price;
             let mut order = Order::new();

@@ -187,11 +187,12 @@ impl RestApi for Rest {
             orders::OrderStatus::Rejected(bd)
         }
     }
+
     async fn get_outstanding_orders(&self, symbol: &str) -> Vec<orders::Order> {
         let url = self.url.clone() + "/api/v3/openOrders";
         let tstamp_str = format!("{}", Utc::now().timestamp_millis());
         let mut queries: Vec<(&str, &str)> = vec![("symbol", symbol), ("timestamp", &tstamp_str)];
-        let mut request = self.client.post(url).query(&queries).expect("in adding queries");
+        let mut request = self.client.get(url).query(&queries).expect("in adding queries");
         let query_str = request.get_uri().query().expect("no query?");
         let signature = Signer::new(MessageDigest::sha256(), &self.secret)
             .expect("in creating the signer")
@@ -203,14 +204,11 @@ impl RestApi for Rest {
             .join("");
         queries.push(("signature", &signature));
         request = request.query(&queries).expect("in setting queries with signature");
-        let lives: Vec<orders::Order> = request
-            .send()
-            .await
-            .expect("in send binance outstanding orders request")
+        let mut response = request.send().await.expect("in send binance outstanding orders request");
+        let lives: Vec<orders::Order> = response
             .json::<Vec<LiveOrderUpdate>>()
-            .limit(128_000_000)
             .await
-            .expect("in json::<AccountStatus>")
+            .expect("in receiving outstanding orders")
             .into_iter()
             .filter_map(|live_update| live_update.try_into().ok())
             .collect();
