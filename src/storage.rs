@@ -263,25 +263,33 @@ reference bigint NULL,
 CONSTRAINT transactions_pkey PRIMARY KEY (exchange, symbol, tstamp, id)
 );
 */
+
 impl Transactions {
     pub async fn new(host: &str, arbiter: &mut actix_rt::Arbiter) -> Self {
         let (sender, receiver) = channel::<Connection>();
         let f = Box::pin(async move {
             loop {
+                println!("Transactions::loop - try_recv +");
                 let elem = receiver.try_recv();
                 match elem {
                     Ok(connection) => {
+                        println!("Transactions::loop - connection.await +");
                         error!("connection {:?}", connection.await);
+                        println!("Transactions::loop - connection.await -");
                     }
                     Err(TryRecvError::Empty) => {
-                        actix_rt::time::delay_for(std::time::Duration::from_secs(20)).await;
+                        println!("Transactions::loop - delay_for +");
+                        actix_rt::time::delay_for(std::time::Duration::from_secs(60 * 5)).await;
+                        println!("Transactions::loop - delay_for -");
                     }
                     Err(TryRecvError::Disconnected) => return,
                 }
+                println!("Transactions::loop - try_recv -");
             }
         });
         arbiter.send(f);
         let (client, connection) = tokio_postgres::connect(host, NoTls).await.expect("when connecting to postgres");
+        actix_rt::time::delay_for(std::time::Duration::from_secs(20)).await;
         sender.send(connection).unwrap();
         Self {
             host: String::from(host),

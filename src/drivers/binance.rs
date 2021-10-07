@@ -13,7 +13,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
-use log::{debug, info, warn};
+use log::{debug, info, warn, error};
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
@@ -332,14 +332,13 @@ impl LiveFeed for Live {
 
             let nnext = self.ws_conn.next().await;
             debug!("[{}] received a next {:?}", Utc::now(), nnext);
-            /*
             if nnext.is_none() {
-                return LiveEvent::ReconnectionRequired;
+                actix_rt::time::delay_for(std::time::Duration::from_secs(5)).await;
+                continue;
             }
-            */
-            let msg = nnext.unwrap().expect("in next message");
+            let msg = nnext.unwrap();
             match msg {
-                Frame::Text(text) => {
+                Ok(Frame::Text(text)) => {
                     let panic_msg = format!("original text {:?}", text);
                     let mesg = serde_json::from_slice::<LiveMessage>(&text).expect(&panic_msg);
                     let m_event = interpret_message(mesg);
@@ -347,12 +346,15 @@ impl LiveFeed for Live {
                         return event;
                     }
                 }
-                Frame::Ping(bytes) => {
+                Ok(Frame::Ping(bytes)) => {
                     self.ws_conn.send(awc::ws::Message::Pong(bytes)).await.expect("when ponging");
                 }
-                Frame::Close(reasons) => {
+                Ok(Frame::Close(reasons)) => {
                     warn!("connection closed {:?}", reasons);
                     return LiveEvent::ReconnectionRequired;
+                }
+                Err(e) => {
+                    error!("binance - {:?}", e)
                 }
                 _ => {}
             };
