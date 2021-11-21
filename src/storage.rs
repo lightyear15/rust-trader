@@ -269,22 +269,16 @@ impl Transactions {
         let (sender, receiver) = channel::<Connection>();
         let f = Box::pin(async move {
             loop {
-                println!("Transactions::loop - try_recv +");
                 let elem = receiver.try_recv();
                 match elem {
                     Ok(connection) => {
-                        println!("Transactions::loop - connection.await +");
                         error!("connection {:?}", connection.await);
-                        println!("Transactions::loop - connection.await -");
                     }
                     Err(TryRecvError::Empty) => {
-                        println!("Transactions::loop - delay_for +");
                         actix_rt::time::delay_for(std::time::Duration::from_secs(60 * 5)).await;
-                        println!("Transactions::loop - delay_for -");
                     }
                     Err(TryRecvError::Disconnected) => return,
                 }
-                println!("Transactions::loop - try_recv -");
             }
         });
         arbiter.send(f);
