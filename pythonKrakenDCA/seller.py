@@ -1,5 +1,3 @@
-
-
 import sys
 import logging
 from datetime import datetime
@@ -18,15 +16,17 @@ def main(txLogFile, db_conn, person, symbol, price_decimals):
         # logging.info("processing order # %s #", tx)
         if tx == "":
             continue
-        status, ttype, price, vol, txID = common.queryOrder(keys, tx)
+        status, side, txID, trades = common.queryOrder(keys, tx)
         # a take profit order closed
-        if status == "closed" and ttype == "sell":
+        if status == "closed" and side == "sell":
             logging.info("%s sell closed order", tx)
             buyRef = txID - common.MAX_RANGE
-            common.recordTransaction(db_conn)
-        elif status == "closed" and ttype == "buy":
+            price, vol, fees, tstamp = common.queryTransaction(keys, trades)
+            common.recordTransaction(db_conn, symbol, tstamp, side, price, vol, txID, fees, buyRef)
+        elif status == "closed" and side == "buy":
             logging.info("%s buy closed order", tx)
-            common.recordTransaction(db_conn)
+            price, vol, fees, tstamp = common.queryTransaction(keys, trades)
+            common.recordTransaction(db_conn, symbol, tstamp, side, price, vol, txID, fees, 0)
             tp_price, tp_volume = computeTakeProfit(person, price, vol)
             sellID = txID + common.MAX_RANGE
             tp_txid = common.addOrder(keys, symbol, "sell", tp_volume, price=tp_price,

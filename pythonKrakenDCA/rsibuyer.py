@@ -7,6 +7,7 @@ import common
 import config
 from ta import momentum
 
+RSI_THRE = 30
 
 def main(txLogFile, person, symbol, price_decimals):
     interval = timedelta(days=1)
@@ -15,14 +16,14 @@ def main(txLogFile, person, symbol, price_decimals):
     rsi = getRSI(series)
     lastRsi = rsi.rsi()[-1]
     secondLastRsi = rsi.rsi()[-2]
-    if lastRsi >= 20:
-        logging.info("lastRsi %f, quitting", lastRsi)
+    if lastRsi >= RSI_THRE:
+        logging.info("lastRsi %f @ %f, quitting", lastRsi, lastPrice)
         return
-    if secondLastRsi >= 20:
-        logging.info("secondLastRsi %f, quitting", secondLastRsi)
+    if secondLastRsi >= RSI_THRE:
+        logging.info("secondLastRsi %f @ %f, quitting", secondLastRsi, lastPrice)
         return
     if lastRsi < secondLastRsi:
-        logging.info("lastRsi < secondLastRsi %f < %f, quitting", lastRsi, secondLastRsi)
+        logging.info("lastRsi < secondLastRsi %f < %f @ %f, quitting", lastRsi, secondLastRsi, lastPrice)
         return
     volume = common.getVolume(config.euros[person], lastPrice)
     txid = common.addOrder(config.keys[person], symbol, "buy",
@@ -49,8 +50,8 @@ def getRSI(candles):
 
 
 if __name__ == "__main__":
-    person, symbol, log_file, tx_file, cnt_file, decimals = common.processInputArgs(sys.argv)
-    common.checkOrCreateFileNames(log_file, tx_file, cnt_file)
+    person, symbol, log_file, tx_file, decimals = common.processInputArgs(sys.argv)
+    common.checkOrCreateFileNames(log_file, tx_file)
     logging.basicConfig(filename=log_file, level=logging.INFO)
     logging.info("###### rsibuyer for on {} {}".format(symbol, datetime.now()))
     main(tx_file, person, symbol, decimals)

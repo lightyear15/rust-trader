@@ -9,7 +9,7 @@ import time
 import os
 import logging
 import psycopg2
-from datetime import timedelta
+from datetime import timedelta, datetime
 import config
 
 MAX_RANGE = 8388608
@@ -48,33 +48,59 @@ def checkOrCreateFileNames(log, tx):
         open(log, 'a').close()
     if os.path.isfile(tx) is False:
         open(tx, 'a').close()
-    return
 
 
 def nonce() -> int:
     return int(1000*time.time())
 
 
-def queryOrder(keys, tx):
+def queryOrder(keys, tx) -> (str, str, float, float, int):
     urlpath = "/0/private/QueryOrders"
     data = {"txid": tx, "nonce": nonce()}
     headers = {"API-Key": keys["key"], "API-Sign": sign(keys, data, urlpath)}
-    # logging.info("querying order %s", tx)
-    order = requests.post(config.api_endpoint + urlpath, data=data, headers=headers)
-    if order.status_code != 200:
-        logging.error("got an error on AddOrder")
+    response = requests.post(config.api_endpoint + urlpath, data=data, headers=headers)
+    if response.status_code != 200:
+        logging.error("got an error on queryOrders")
         return None
-    order_json = order.json()
-    # print("queryOrder", tx, order_json)
-    if order_json["error"] != []:
-        logging.error("queryOrder, response error %s", order_json["error"][0])
+    response_json = response.json()
+    if response_json["error"] != []:
+        logging.error("queryOrder, response error %s", response_json["error"][0])
         return None
-    status = order_json["result"][tx]["status"]
-    ttype = order_json["result"][tx]["descr"]["type"]
-    vol = float(order_json["result"][tx]["vol_exec"])
-    price = float(order_json["result"][tx]["price"])
-    ref = int(order_json["result"][tx]["userref"])
-    return status, ttype, price, vol, ref
+    order = response_json["result"][tx]
+    status = order["status"]
+    ttype = order["descr"]["type"]
+    ref = int(order["userref"])
+    trades = []
+    if "trades" in order:
+        trades = order["trades"]
+    return status, ttype, ref, trades
+
+
+def queryTransaction(keys, txs: [str]) -> (float, float, float, datetime):
+    urlpath = "/0/private/QueryTrades"
+    data = {"txid": ",".join(txs), "nonce": nonce()}
+    headers = {"API-Key": keys["key"], "API-Sign": sign(keys, data, urlpath)}
+    response = requests.post(config.api_endpoint + urlpath, data=data, headers=headers)
+    if response.status_code != 200:
+        logging.error("got an error on queryTransactions")
+        return None
+    response_json = response.json()
+    if response_json["error"] != []:
+        logging.error("queryTransactions, response error %s", response_json["error"][0])
+        return None
+    price = 0.0
+    volume = 0.0
+    tstamp = None
+    fees = 0.0
+    for tx in txs:
+        price += response_json["result"][tx]["price"]
+        fees += response_json["result"][tx]["fee"]
+        volume += response_json["result"][tx]["vol"]
+        tst = datetime.fromtimestamp(response_json["result"][tx]["time"])
+        if tstamp is None or tstamp < tst:
+            tstamp = tst
+    txCount = len(txs)
+    return price/txCount, volume, fees, tstamp
 
 
 def addOrder(keys, symbol, direction, volume, price=None,
@@ -146,8 +172,8 @@ def getVolume(max_order: float, buy_price: float) -> float:
 def openDBConn(connData):
     if connData is None:
         return None
-    con = psycopg2.connect(database=connData["database"], user=connData["user"],
-                           password=connData["password"], host=connData["host"], port=connData["port"])
+    con = psycopg2.connect(database=connData["database"], user=connData["username"],
+                           password=connData["password"], host=connData["hostname"], port=connData["port"])
     return con
 
 
@@ -158,6 +184,11 @@ def closeDBConn(db_conn):
     db_conn.close()
 
 
-def recordTransaction(db_conn):
+def recordTransaction(db_conn, symbol: str, tstamp: datetime, side: str, price: float, volume: float,
+                      opId: int, fees: float, reference: int):
     if db_conn is None:
         return
+    cursor = db_conn.cursor()
+    cursor.execute("INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, fees, fees_asset, reference) VALUES('kraken', '%s', '%s', '%s', %f, %f, %d, %f, 'EUR', %d)", (symbol, tstamp, side, price, volume, opId, fees, reference))
+    db_conn.commit()
+    cursor.close()
