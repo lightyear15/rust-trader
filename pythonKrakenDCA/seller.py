@@ -16,21 +16,19 @@ def main(txLogFile, db_conn, person, symbol, price_decimals):
         # logging.info("processing order # %s #", tx)
         if tx == "":
             continue
-        status, side, txID, trades = common.queryOrder(keys, tx)
+        status, side, txID, price, volume, fees, tstamp = common.queryOrder(keys, tx)
         # a take profit order closed
         if status == "closed" and side == "sell":
             logging.info("%s sell closed order", tx)
             buyRef = txID - common.MAX_RANGE
-            price, vol, fees, tstamp = common.queryTransaction(keys, trades)
-            common.recordTransaction(db_conn, symbol, tstamp, side, price, vol, txID, fees, buyRef)
+            common.recordTransaction(db_conn, symbol, tstamp, side, price, volume, txID, fees, buyRef)
         elif status == "closed" and side == "buy":
             logging.info("%s buy closed order", tx)
-            price, vol, fees, tstamp = common.queryTransaction(keys, trades)
-            common.recordTransaction(db_conn, symbol, tstamp, side, price, vol, txID, fees, 0)
-            tp_price, tp_volume = computeTakeProfit(person, price, vol)
+            tp_price, tp_volume = computeTakeProfit(person, price, volume)
             sellID = txID + common.MAX_RANGE
             tp_txid = common.addOrder(keys, symbol, "sell", tp_volume, price=tp_price,
                                       price_decimals=price_decimals, userref=sellID)
+            common.recordTransaction(db_conn, symbol, tstamp, side, price, volume, txID, fees, 0)
             logging.info("taking profit -> %s", tp_txid)
             if tp_txid is not None:
                 open_orders.append(tp_txid)
@@ -50,7 +48,8 @@ def main(txLogFile, db_conn, person, symbol, price_decimals):
 
 
 def computeTakeProfit(person, price, volume):
-    takeProfitPrice = price * (1.0 + config.take_profit_factor[person])
+    factor = 1.0 + config.take_profit_factor[person]
+    takeProfitPrice = price * factor
     takeProfitVolume = price * volume / takeProfitPrice
     return takeProfitPrice, takeProfitVolume
 

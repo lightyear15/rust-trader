@@ -68,24 +68,28 @@ def queryOrder(keys, tx) -> (str, str, float, float, int):
         return None
     order = response_json["result"][tx]
     status = order["status"]
-    ttype = order["descr"]["type"]
-    ref = int(order["userref"])
-    trades = []
-    if "trades" in order:
-        trades = order["trades"]
-    return status, ttype, ref, trades
+    side = order["descr"]["type"]
+    ref = int(order["userref"] or 0)
+    price = float(order.get("price", 0.0))
+    volume = float(order.get("vol_exec", 0))
+    fees = float(order.get("fee", 0.0))
+    tstamp = datetime.fromtimestamp(order.get("closetm", 0))
+    return status, side, ref, price, volume, fees, tstamp
 
 
 def queryTransaction(keys, txs: [str]) -> (float, float, float, datetime):
+    print(keys, txs)
     urlpath = "/0/private/QueryTrades"
     data = {"txid": ",".join(txs), "nonce": nonce()}
     headers = {"API-Key": keys["key"], "API-Sign": sign(keys, data, urlpath)}
     response = requests.post(config.api_endpoint + urlpath, data=data, headers=headers)
     if response.status_code != 200:
+        print(response)
         logging.error("got an error on queryTransactions")
         return None
     response_json = response.json()
     if response_json["error"] != []:
+        print(response)
         logging.error("queryTransactions, response error %s", response_json["error"][0])
         return None
     price = 0.0
@@ -189,6 +193,6 @@ def recordTransaction(db_conn, symbol: str, tstamp: datetime, side: str, price: 
     if db_conn is None:
         return
     cursor = db_conn.cursor()
-    cursor.execute("INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, fees, fees_asset, reference) VALUES('kraken', '%s', '%s', '%s', %f, %f, %d, %f, 'EUR', %d)", (symbol, tstamp, side, price, volume, opId, fees, reference))
+    cursor.execute("INSERT INTO transactions (exchange, symbol, tstamp, side, price, volume, id, fees, fees_asset, reference) VALUES('kraken', %s, %s, %s, %s, %s, %s, %s, 'EUR', %s)", (symbol, tstamp, side.capitalize(), price, volume, opId, fees, reference))
     db_conn.commit()
     cursor.close()
