@@ -46,7 +46,7 @@ def buildSeriess(candls):
     return high, low, close, volume
 
 
-def getmfi(high, low, close, volume):
+def getMFI(high, low, close, volume):
     return volume.mfiIndicator(high=high, low=low, close=close, volume=volume)
 
 
