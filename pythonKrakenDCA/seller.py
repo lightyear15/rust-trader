@@ -23,7 +23,7 @@ def main(txLogFile, db_conn, person, symbol, price_decimals):
             buyRef = txID - common.MAX_RANGE
             common.recordTransaction(db_conn, symbol, tstamp, side, price, volume, txID, fees, buyRef)
         elif status == "closed" and side == "buy":
-            logging.info("%s buy closed order", tx)
+            logging.info("%s buy closed order - %d", tx, txID)
             tp_price, tp_volume = computeTakeProfit(person, price, volume)
             sellID = txID + common.MAX_RANGE
             tp_txid = common.addOrder(keys, symbol, "sell", tp_volume, price=tp_price,

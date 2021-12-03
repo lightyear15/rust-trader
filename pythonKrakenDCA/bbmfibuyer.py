@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pandas
 import common
 import config
-from ta import volume
+import ta
 
 MFI_THRE = 20
 
@@ -16,9 +16,16 @@ def main(txLogFile, person, symbol, price_decimals):
     (candles, lastPrice) = common.getLastCandles(symbol, interval)
     high, low, close, volume = buildSeriess(candles)
     mfi = getMFI(high,low,close,volume)
-    lastMfi = mfi.mfi()[-1]
+    bb = getBB(close)
+    lastMfi = mfi.money_flow_index()[-1]
+    bbLowIndicator = bb.bollinger_lband_indicator()[-1]
+    logging.info("BBMFI on %s %f - %d price %f", symbol, lastMfi, bbLowIndicator, lastPrice)
+    return
     if lastMfi >= mfi_THRE:
         logging.info("lastMfi %f @ %f, quitting", lastMfi, lastPrice)
+        return
+    if bbLowIndicator == 0:
+        logging.info("bbLowIndicator %d @ %f, quitting", bbLowIndicator, lastPrice)
         return
     volume = common.getVolume(config.euros[person], lastPrice)
     buyID = randint(0, common.MAX_RANGE - 1)
@@ -47,12 +54,16 @@ def buildSeriess(candls):
 
 
 def getMFI(high, low, close, volume):
-    return volume.mfiIndicator(high=high, low=low, close=close, volume=volume)
+    return ta.volume.MFIIndicator(high=high, low=low, close=close, volume=volume)
+
+
+def getBB(close):
+    return ta.volatility.BollingerBands(close=close)
 
 
 if __name__ == "__main__":
     person, symbol, log_file, tx_file, decimals = common.processInputArgs(sys.argv)
     common.checkOrCreateFileNames(log_file, tx_file)
     logging.basicConfig(filename=log_file, level=logging.INFO)
-    logging.info("###### mfibuyer for on {} {}".format(symbol, datetime.now()))
+    logging.info("###### bbmfibuyer for on {} {}".format(symbol, datetime.now()))
     main(tx_file, person, symbol, decimals)
