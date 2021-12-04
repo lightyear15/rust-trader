@@ -19,8 +19,6 @@ def main(txLogFile, person, symbol, price_decimals):
     bb = getBB(close)
     lastMfi = mfi.money_flow_index()[-1]
     bbLowIndicator = bb.bollinger_lband_indicator()[-1]
-    logging.info("BBMFI on %s %f - %d price %f", symbol, lastMfi, bbLowIndicator, lastPrice)
-    return
     if lastMfi >= mfi_THRE:
         logging.info("lastMfi %f @ %f, quitting", lastMfi, lastPrice)
         return
