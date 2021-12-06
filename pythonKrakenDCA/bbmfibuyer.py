@@ -5,6 +5,7 @@ import pandas
 import common
 import config
 import ta
+from random import randint
 
 MFI_THRE = 20
 
@@ -19,7 +20,7 @@ def main(txLogFile, person, symbol, price_decimals):
     bb = getBB(close)
     lastMfi = mfi.money_flow_index()[-1]
     bbLowIndicator = bb.bollinger_lband_indicator()[-1]
-    if lastMfi >= mfi_THRE:
+    if lastMfi >= MFI_THRE:
         logging.info("lastMfi %f @ %f, quitting", lastMfi, lastPrice)
         return
     if bbLowIndicator == 0:

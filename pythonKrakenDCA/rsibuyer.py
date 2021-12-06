@@ -6,6 +6,7 @@ import pandas
 import common
 import config
 from ta import momentum
+from random import randint
 
 RSI_THRE = 40
 
