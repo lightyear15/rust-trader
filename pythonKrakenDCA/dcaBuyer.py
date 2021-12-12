@@ -15,9 +15,9 @@ def main(txLogFile, person, symbol, price_decimals):
     interval = timedelta(minutes=60)
     (candles, last) = common.getLastCandles(symbol, interval)
     candles = candles[:int(config.window / interval)]
-    weighted = getWeightedAveragePrice(candles)
-    volume = common.getVolume(config.euros[person], weighted)
-    price = weighted * (1 - config.take_profit_factor[person] / 2.0)
+    price = getWeightedAveragePrice(candles)
+    expense = config.dca_table[person][symbol]
+    volume = common.getVolume(expense, price)
     buyID = randint(0, common.MAX_RANGE - 1)
     txid = common.addOrder(config.keys[person], symbol, "buy",
                                                         volume,
