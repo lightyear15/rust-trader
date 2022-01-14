@@ -110,20 +110,27 @@ def queryTransaction(keys, txs: [str]) -> (float, float, float, datetime):
 def addOrder(keys, symbol, direction, volume, price=None,
              price_decimals=None, expiration: timedelta = None, userref: int = None):
     vol_str = "{:.8f}".format(volume)
+    price_str = None
+    if price is not None:
+        price_str = "{:.{prec}f}".format(price, prec=price_decimals)
+    return addRawOrder(keys, symbol, direction, vol_str, price_str, expiration, timedelta, userref)
+
+
+def addRawOrder(keys, symbol, direction, volume: str, price=None: str,
+             expiration: timedelta = None, userref: int = None):
     urlpath = "/0/private/AddOrder"
     data = {
             "nonce": nonce(),
             "pair": symbol,
             "type": direction,
-            "volume": vol_str,
+            "volume": volume,
             # "validate": "true",
             }
     if price is None:
         data["ordertype"] = "market"
     else:
-        price_str = "{:.{prec}f}".format(price, prec=price_decimals)
         data["ordertype"] = "limit"
-        data["price"] = price_str
+        data["price"] = price
     if expiration is not None:
         data["expiretm"] = "+{}".format(int(expiration.total_seconds()))
     if userref is not None:
