@@ -13,9 +13,12 @@ def main(txLogFile, person, symbol, price_decimals):
     if orders_count >= config.max_order[person]:
         return
     interval = timedelta(minutes=60)
-    (candles, last) = common.getLastCandles(symbol, interval)
+    (candles, lastPrice) = common.getLastCandles(symbol, interval)
     candles = candles[:int(config.window / interval)]
-    price = getWeightedAveragePrice(candles)
+    wPrice = getWeightedAveragePrice(candles)
+    price = lastPrice
+    if wPrice < lastPrice:
+        price = wPrice
     expense = config.dca_table[person][symbol]
     volume = common.getVolume(expense, price)
     buyID = randint(0, common.MAX_RANGE - 1)
