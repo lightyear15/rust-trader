@@ -116,7 +116,7 @@ def addOrder(keys, symbol, direction, volume, price=None,
     return addRawOrder(keys, symbol, direction, vol_str, price_str, expiration, timedelta, userref)
 
 
-def addRawOrder(keys, symbol, direction, volume: str, price=None: str,
+def addRawOrder(keys, symbol, direction, volume: str, price: str = None,
              expiration: timedelta = None, userref: int = None):
     urlpath = "/0/private/AddOrder"
     data = {
@@ -135,6 +135,7 @@ def addRawOrder(keys, symbol, direction, volume: str, price=None: str,
         data["expiretm"] = "+{}".format(int(expiration.total_seconds()))
     if userref is not None:
         data["userref"] = userref
+    logging.info("addRawOrder sending order %v", data)
     headers = {"API-Key": keys["key"], "API-Sign": sign(keys, data, urlpath)}
     # logging.info("sending order, direction %s, vol %s, price %s", direction, vol_str, price_str)
     order = requests.post(config.api_endpoint + urlpath, data=data, headers=headers)
