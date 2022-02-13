@@ -113,7 +113,7 @@ def addOrder(keys, symbol, direction, volume, price=None,
     price_str = None
     if price is not None:
         price_str = "{:.{prec}f}".format(price, prec=price_decimals)
-    return addRawOrder(keys, symbol, direction, vol_str, price_str, expiration, timedelta, userref)
+    return addRawOrder(keys, symbol, direction, vol_str, price_str, expiration, userref)
 
 
 def addRawOrder(keys, symbol, direction, volume: str, price: str = None,
