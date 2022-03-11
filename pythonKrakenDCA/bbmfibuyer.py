@@ -7,7 +7,7 @@ import config
 import ta
 from random import randint
 
-MFI_THRE = 20
+MFI_THRE = 30
 
 def main(txLogFile, person, symbol, price_decimals):
     orders_count = len(open(txLogFile).readlines())
