@@ -11,8 +11,16 @@ import logging
 import psycopg2
 from datetime import timedelta, datetime
 import config
+from typing import List, Tuple, Optional
 
 MAX_RANGE = 8388608
+priceDecimals = {
+    "xxbtzeur": 1,
+    "xethzeur": 2,
+    "atomeur": 2,
+    "adaeur": 3
+    }
+
 
 def sign(keys, data, urlpath):
     postdata = urllib.parse.urlencode(data)
@@ -23,7 +31,7 @@ def sign(keys, data, urlpath):
     return sigdigest.decode()
 
 
-def processInputArgs(args: [str]):
+def processInputArgs(args: List[str]):
     if len(args) < 3:
         print("missing input args <person> <symbol> (decimals)")
         sys.exit()
@@ -36,25 +44,35 @@ def processInputArgs(args: [str]):
     return person, symbol, log_file, tx_file, decimals
 
 
+def buildTXFileName(person: str, symbol: str) -> str:
+    basePath = os.environ["HOME"]
+    txFile = os.path.join(basePath, "krakenDCA/logs/{}/{}_txs.txt".format(person, symbol))
+    return txFile
+
+
 def buildFileNames(person: str, symbol: str):
-    base_path = os.environ["HOME"]
-    log_file = os.path.join(base_path, "krakenDCA/logs/{}/{}.log".format(person, symbol))
-    tx_file = os.path.join(base_path, "krakenDCA/logs/{}/{}_txs.txt".format(person, symbol))
-    return log_file, tx_file
+    basePath = os.environ["HOME"]
+    logFile = os.path.join(basePath, "krakenDCA/logs/{}/{}.log".format(person, symbol))
+    txFile = os.path.join(basePath, "krakenDCA/logs/{}/{}_txs.txt".format(person, symbol))
+    return logFile, txFile
 
 
-def checkOrCreateFileNames(log, tx):
-    if os.path.isfile(log) is False:
-        open(log, 'a').close()
-    if os.path.isfile(tx) is False:
-        open(tx, 'a').close()
+def buildDCALogFileName(person: str) -> str:
+    basePath = os.environ["HOME"]
+    logFile = os.path.join(basePath, "krakenDCA/logs/{}/dca.log".format(person))
+    return logFile
+
+
+def checkOrCreateFileName(fname):
+    if os.path.isfile(fname) is False:
+        open(fname, 'a').close()
 
 
 def nonce() -> int:
-    return int(1000*time.time())
+    return int(1000 * time.time())
 
 
-def queryOrder(keys, tx) -> (str, str, float, float, int):
+def queryOrder(keys, tx) -> Optional[Tuple[str, str, float, float, int]]:
     urlpath = "/0/private/QueryOrders"
     data = {"txid": tx, "nonce": nonce()}
     headers = {"API-Key": keys["key"], "API-Sign": sign(keys, data, urlpath)}
@@ -74,10 +92,10 @@ def queryOrder(keys, tx) -> (str, str, float, float, int):
     volume = float(order.get("vol_exec", 0))
     fees = float(order.get("fee", 0.0))
     tstamp = datetime.fromtimestamp(order.get("closetm", 0))
-    return status, side, ref, price, volume, fees, tstamp
+    return (status, side, ref, price, volume, fees, tstamp)
 
 
-def queryTransaction(keys, txs: [str]) -> (float, float, float, datetime):
+def queryTransaction(keys, txs: List[str]) -> Optional[Tuple[float, float, float, datetime]]:
     print(keys, txs)
     urlpath = "/0/private/QueryTrades"
     data = {"txid": ",".join(txs), "nonce": nonce()}
@@ -104,7 +122,7 @@ def queryTransaction(keys, txs: [str]) -> (float, float, float, datetime):
         if tstamp is None or tstamp < tst:
             tstamp = tst
     txCount = len(txs)
-    return price/txCount, volume, fees, tstamp
+    return (price / txCount, volume, fees, tstamp)
 
 
 def addOrder(keys, symbol, direction, volume, price=None,
@@ -117,15 +135,15 @@ def addOrder(keys, symbol, direction, volume, price=None,
 
 
 def addRawOrder(keys, symbol, direction, volume: str, price: str = None,
-             expiration: timedelta = None, userref: int = None):
+                expiration: timedelta = None, userref: int = None):
     urlpath = "/0/private/AddOrder"
     data = {
-            "nonce": nonce(),
-            "pair": symbol,
-            "type": direction,
-            "volume": volume,
-            # "validate": "true",
-            }
+        "nonce": nonce(),
+        "pair": symbol,
+        "type": direction,
+        "volume": volume,
+        # "validate": "true",
+          }
     if price is None:
         data["ordertype"] = "market"
     else:
@@ -135,9 +153,8 @@ def addRawOrder(keys, symbol, direction, volume: str, price: str = None,
         data["expiretm"] = "+{}".format(int(expiration.total_seconds()))
     if userref is not None:
         data["userref"] = userref
-    logging.info("addRawOrder sending order %s", data)
+    logging.debug("addRawOrder sending order %s", data)
     headers = {"API-Key": keys["key"], "API-Sign": sign(keys, data, urlpath)}
-    # logging.info("sending order, direction %s, vol %s, price %s", direction, vol_str, price_str)
     order = requests.post(config.api_endpoint + urlpath, data=data, headers=headers)
     if order.status_code != 200:
         logging.error("got an error on AddOrder")
@@ -166,13 +183,13 @@ def getLastCandles(symbol: str, interval: timedelta):
         logging.error("addOrder, response error %s", ohlc_json["error"][0])
         return None, None
     candles = [{
-            "tstamp": int(cdl[0]),
-            "open": float(cdl[1]),
-            "high": float(cdl[2]),
-            "low": float(cdl[3]),
-            "close": float(cdl[4]),
-            "volume": float(cdl[6])
-            } for cdl in ohlc_json["result"][symbol.upper()]]
+        "tstamp": int(cdl[0]),
+        "open": float(cdl[1]),
+        "high": float(cdl[2]),
+        "low": float(cdl[3]),
+        "close": float(cdl[4]),
+        "volume": float(cdl[6])
+         } for cdl in ohlc_json["result"][symbol.upper()]]
     candles.sort(key=lambda x: x["tstamp"], reverse=True)
     return (candles[1:], candles[0]["close"])
 

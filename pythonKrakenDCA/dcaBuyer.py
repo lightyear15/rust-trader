@@ -1,4 +1,5 @@
 
+import time
 import sys
 import logging
 from datetime import datetime, timedelta
@@ -8,9 +9,24 @@ import common
 import config
 
 
-def main(txLogFile, person, symbol, price_decimals):
-    orders_count = len(open(txLogFile).readlines())
-    if orders_count >= config.max_order[person]:
+def main(person):
+    logFile = common.buildDCALogFileName(person)
+    common.checkOrCreateFileName(logFile)
+    logging.basicConfig(filename=logFile, level=logging.INFO)
+    symbols = config.dca_table[person].keys()
+    for symbol in symbols:
+        logging.info("###### buyer for on {} {}".format(symbol, datetime.now()))
+        txFile = common.buildTXFileName(person, symbol)
+        common.checkOrCreateFileName(txFile)
+        priceDec = common.priceDecimals[symbol]
+        dcaBuy(txFile, person, symbol, priceDec)
+        time.sleep(5)
+    return
+
+
+def dcaBuy(txLogFile, person, symbol, priceDecimals):
+    ordersCount = len(open(txLogFile).readlines())
+    if ordersCount >= config.max_order[person]:
         return
     interval = timedelta(minutes=60)
     (candles, lastPrice) = common.getLastCandles(symbol, interval)
@@ -25,7 +41,7 @@ def main(txLogFile, person, symbol, price_decimals):
     txid = common.addOrder(config.keys[person], symbol, "buy",
                                                         volume,
                                                         price=price,
-                                                        price_decimals=price_decimals,
+                                                        price_decimals=priceDecimals,
                                                         expiration=config.expiration,
                                                         userref=buyID)
     logging.info("limit order vol %f, price %f, buyID %d, txID %s", volume, price, buyID, txid)
@@ -50,8 +66,9 @@ def getWeightedAveragePrice(candles):
 
 
 if __name__ == "__main__":
-    person, symbol, log_file, tx_file, decimals = common.processInputArgs(sys.argv)
-    common.checkOrCreateFileNames(log_file, tx_file)
-    logging.basicConfig(filename=log_file, level=logging.INFO)
-    logging.info("###### buyer for on {} {}".format(symbol, datetime.now()))
-    main(tx_file, person, symbol, decimals)
+    args = sys.argv
+    if len(args) < 2:
+        print("missing input args <person>")
+        sys.exit()
+    person = args[1]
+    main(person)

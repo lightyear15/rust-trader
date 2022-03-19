@@ -9,6 +9,7 @@ from random import randint
 
 MFI_THRE = 30
 
+
 def main(txLogFile, person, symbol, price_decimals):
     orders_count = len(open(txLogFile).readlines())
     if orders_count >= config.max_order[person]:
@@ -16,7 +17,7 @@ def main(txLogFile, person, symbol, price_decimals):
     interval = timedelta(days=1)
     (candles, lastPrice) = common.getLastCandles(symbol, interval)
     high, low, close, volume = buildSeriess(candles)
-    mfi = getMFI(high,low,close,volume)
+    mfi = getMFI(high, low, close, volume)
     bb = getBB(close)
     lastMfi = mfi.money_flow_index()[-1]
     bbLowIndicator = bb.bollinger_lband_indicator()[-1]
@@ -45,10 +46,10 @@ def main(txLogFile, person, symbol, price_decimals):
 
 def buildSeriess(candls):
     index = [pandas.Timestamp(c["tstamp"], unit="s") for c in candls]
-    high = pandas.Series(data=[c["high"] for c in candls], index=index).sort_index() 
-    low = pandas.Series(data=[c["low"] for c in candls], index=index).sort_index() 
-    close = pandas.Series(data=[c["close"] for c in candls], index=index).sort_index() 
-    volume = pandas.Series(data=[c["volume"] for c in candls], index=index).sort_index() 
+    high = pandas.Series(data=[c["high"] for c in candls], index=index).sort_index()
+    low = pandas.Series(data=[c["low"] for c in candls], index=index).sort_index()
+    close = pandas.Series(data=[c["close"] for c in candls], index=index).sort_index()
+    volume = pandas.Series(data=[c["volume"] for c in candls], index=index).sort_index()
     return high, low, close, volume
 
 
@@ -61,8 +62,9 @@ def getBB(close):
 
 
 if __name__ == "__main__":
-    person, symbol, log_file, tx_file, decimals = common.processInputArgs(sys.argv)
-    common.checkOrCreateFileNames(log_file, tx_file)
-    logging.basicConfig(filename=log_file, level=logging.INFO)
+    person, symbol, logFile, txFile, decimals = common.processInputArgs(sys.argv)
+    common.checkOrCreateFileName(logFile)
+    common.checkOrCreateFileName(txFile)
+    logging.basicConfig(filename=logFile, level=logging.INFO)
     logging.info("###### bbmfibuyer for on {} {}".format(symbol, datetime.now()))
-    main(tx_file, person, symbol, decimals)
+    main(txFile, person, symbol, decimals)
