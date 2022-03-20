@@ -55,9 +55,10 @@ def computeTakeProfit(person, price, volume):
 
 
 if __name__ == "__main__":
-    person, symbol, log_file, tx_file, decimals = common.processInputArgs(sys.argv)
-    common.checkOrCreateFileNames(log_file, tx_file)
+    person, symbol, logFile, txFile, decimals = common.processInputArgs(sys.argv)
+    common.checkOrCreateFileName(logFile)
+    common.checkOrCreateFileName(txFile)
     db_conn = common.openDBConn(config.database[person])
-    logging.basicConfig(filename=log_file, level=logging.INFO)
+    logging.basicConfig(filename=logFile, level=logging.INFO)
     logging.info("###### seller on {} {}".format(symbol, datetime.now()))
-    main(tx_file, db_conn, person, symbol, decimals)
+    main(txFile, db_conn, person, symbol, decimals)
