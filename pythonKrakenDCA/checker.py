@@ -6,38 +6,49 @@ import time
 
 import common
 import config
+import kraken
+import krakenex
+from pykrakenapi import KrakenAPI
 
 
 def main(person):
     logFile = common.buildDCALogFileName(person)
     common.checkOrCreateFileName(logFile)
     logging.basicConfig(filename=logFile, level=logging.INFO)
+    api = krakenex.API(config.keys[person]["key"], config.keys[person]["secret"])
+    kApi = KrakenAPI(api)
     symbols = config.dca_table[person].keys()
     for symbol in symbols:
+        logging.info("###### checker for on {} {}".format(symbol, datetime.now()))
         txFile = common.buildTXFileName(person, symbol)
         common.checkOrCreateFileName(txFile)
         recordFile = buildRecordFileName(person, symbol)
         common.checkOrCreateFileName(recordFile)
-        check(txFile, recordFile, person, symbol)
+        check(txFile, kApi, recordFile, symbol)
         time.sleep(5)
     return
 
 
-def check(txLogFile, recordFile, person, symbol):
+def check(txLogFile: str, kApi: KrakenAPI, recordFile: str, symbol: str):
     openOrders = []
     closedOrders = []
     transactions = []
-    keys = config.keys[person]
     with open(txLogFile, "r+") as txFD:
         transactions = txFD.read().splitlines()
     for tx in transactions:
         if tx == "":
             continue
-        status, side, txID, price, volume, fees, tstamp = common.queryOrder(keys, tx)
+        queryResult = kraken.queryOrder(kApi, tx)
+        if queryResult is None:
+            openOrders.append(tx)
+            continue
+        status, side, txID, price, volume, fees, tstamp = queryResult
         if status == "closed":
             closedOrders.append("{},{},{},{}".format(tstamp, price, volume, fees))
         elif status == "open":
             openOrders.append(tx)
+        elif status == "expired":
+            logging.info("order %s expired", tx)
         else:
             logging.warning("%s unknown status %s", tx, status)
     with open(recordFile, "a") as recFD:

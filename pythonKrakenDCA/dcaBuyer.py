@@ -7,43 +7,40 @@ from random import randint
 
 import common
 import config
+import kraken
+import krakenex
+from pykrakenapi import KrakenAPI
 
 
 def main(person):
     logFile = common.buildDCALogFileName(person)
     common.checkOrCreateFileName(logFile)
     logging.basicConfig(filename=logFile, level=logging.INFO)
+    api = krakenex.API(config.keys[person]["key"], config.keys[person]["secret"])
+    kApi = KrakenAPI(api)
     symbols = config.dca_table[person].keys()
     for symbol in symbols:
         logging.info("###### buyer for on {} {}".format(symbol, datetime.now()))
         txFile = common.buildTXFileName(person, symbol)
         common.checkOrCreateFileName(txFile)
         priceDec = common.priceDecimals[symbol]
-        dcaBuy(txFile, person, symbol, priceDec)
+        expense = config.dca_table[person][symbol]
+        dcaBuy(txFile, kApi, expense, symbol, priceDec)
         time.sleep(5)
     return
 
 
-def dcaBuy(txLogFile, person, symbol, priceDecimals):
-    ordersCount = len(open(txLogFile).readlines())
-    if ordersCount >= config.max_order[person]:
-        return
-    interval = timedelta(minutes=60)
-    (candles, lastPrice) = common.getLastCandles(symbol, interval)
-    candles = candles[:int(config.window / interval)]
-    wPrice = getWeightedAveragePrice(candles)
+def dcaBuy(txLogFile, kApi, expense, symbol, priceDecimals):
+    interval = timedelta(days=1)
+    (candles, lastPrice) = kraken.getLastCandles(kApi, symbol, interval)
+    wPrice = getWeightedAveragePrice(candles, config.window)
     price = lastPrice
     if wPrice < lastPrice:
         price = wPrice
-    expense = config.dca_table[person][symbol]
     volume = common.getVolume(expense, price)
     buyID = randint(0, common.MAX_RANGE - 1)
-    txid = common.addOrder(config.keys[person], symbol, "buy",
-                                                        volume,
-                                                        price=price,
-                                                        price_decimals=priceDecimals,
-                                                        expiration=config.expiration,
-                                                        userref=buyID)
+    txid = kraken.addOrder(kApi, symbol, "buy", volume, price=price, price_decimals=priceDecimals,
+                           expiration=config.expiration, userref=buyID)
     logging.info("limit order vol %f, price %f, buyID %d, txID %s", volume, price, buyID, txid)
     if txid is None:
         logging.error("buy order failed %f, %f", price, volume)
@@ -53,16 +50,12 @@ def dcaBuy(txLogFile, person, symbol, priceDecimals):
         txFile.write("\n")
 
 
-def getWeightedAveragePrice(candles):
-    total_volume = 0
-    total_price = 0
-    for candle in candles:
-        avg = (candle["low"] + candle["high"]) / 2
-        vol = candle["volume"]
-        total_volume += vol
-        total_price += avg * vol
-    average = total_price / total_volume
-    return average
+def getWeightedAveragePrice(candles, window):
+    limit = datetime.now() - window
+    idx = candles.index
+    cnd = candles[idx >= limit]
+    wg = (cnd["close"] * cnd["volume"]).sum() / cnd["volume"].sum()
+    return wg
 
 
 if __name__ == "__main__":
