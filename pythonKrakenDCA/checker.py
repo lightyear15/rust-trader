@@ -61,8 +61,9 @@ def check(txLogFile: str, kApi: KrakenAPI, recordFile: str, symbol: str):
 
 
 def buildRecordFileName(person: str, symbol: str) -> str:
-    basePath = os.environ["HOME"]
-    recordFName = os.path.join(basePath, "krakenDCA/logs/{}/{}.csv".format(person, symbol))
+    baseFolder = common.buildBaseFolderName(person)
+    recordFname = "{}.csv".format(symbol)
+    recordFName = os.path.join(baseFolder, recordFname)
     if os.path.isfile(recordFName) is False:
         with open(recordFName, "w") as fd:
             fd.write("date,price,volume,fees\n")

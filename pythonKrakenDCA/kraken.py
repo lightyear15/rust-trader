@@ -6,12 +6,19 @@ from pykrakenapi import KrakenAPI
 import pandas
 import krakenex
 
+import config
 
-def queryOrder(kApi: KrakenAPI, tx: str) -> Optional[Tuple[str, str, int, float, float, float, int]]:
+
+def queryOrder(kApi: KrakenAPI, tx: str) -> Optional[Tuple[str, str, int, float, float, float, datetime]]:
     queryInfo = kApi.query_orders_info(txid=tx)
-    return (queryInfo.at[tx, "status"], queryInfo.at[tx, "descr_type"], queryInfo.at[tx, "userref"],
-            float(queryInfo.at[tx, "price"]), float(queryInfo.at[tx, "vol"]), float(queryInfo.at[tx, "fee"]),
-            int(queryInfo.at[tx, "opentm"]))
+    tstamp = datetime.fromtimestamp(queryInfo.at[tx, "opentm"])
+    status = queryInfo.at[tx, "status"]
+    if status == "closed":
+        tstamp = datetime.fromtimestamp(queryInfo.at[tx, "closetm"])
+    return (status, queryInfo.at[tx, "descr_type"], queryInfo.at[tx, "userref"],
+            float(queryInfo.at[tx, "price"]), float(queryInfo.at[tx, "vol"]),
+            float(queryInfo.at[tx, "fee"]), tstamp,
+            )
 
 
 def addOrder(kApi: KrakenAPI, symbol, direction, volume, price=None,
@@ -42,7 +49,7 @@ def addRawOrder(kApi: KrakenAPI, symbol: str, direction: str, volume: str, price
     return txids[0]
 
 
-def getLastCandles(kApi: KrakenAPI, symbol: str, interval: timedelta) -> Tuple[pandas.DataFrame, float]:
+def getLastCandles(kApi: KrakenAPI, symbol: str, interval: timedelta = timedelta(minutes=1)) -> Tuple[pandas.DataFrame, float]:
     interval_minutes = int(interval.total_seconds() / 60.0)
     candles, _ = kApi.get_ohlc_data(pair=symbol, interval=interval_minutes, ascending=True)
     lastPrice = candles.iloc[-1].at["close"]
@@ -51,17 +58,29 @@ def getLastCandles(kApi: KrakenAPI, symbol: str, interval: timedelta) -> Tuple[p
 
 
 if __name__ == "__main__":
-    key = ""
-    secret = ""
-    api = krakenex.API(key, secret)
+    api = krakenex.API(config.keys["giulioTest"]["key"], config.keys["giulioTest"]["secret"])
     kApi = KrakenAPI(api)
-    candles, lastPrice = getLastCandles(kApi, symbol="xxbtzeur", interval=timedelta(days=1))
-    idx = candles.index
-    limit = datetime.now() - timedelta(days=8)
-    print(limit)
-    cnd = candles[idx >= limit]
-    wg = (cnd["close"] * cnd["volume"]).sum() / cnd["volume"].sum()
-    print(wg)
+    # candles, lastPrice = getLastCandles(kApi, symbol="xxbtzeur", interval=timedelta(days=1))
+    # idx = candles.index
+    # limit = datetime.now() - timedelta(days=8)
+    # print(limit)
+    # cnd = candles[idx >= limit]
+    # wg = (cnd["close"] * cnd["volume"]).sum() / cnd["volume"].sum()
+    # print(wg)
     # print(candles)
     # print(lastPrice)
-    # info = queryOrder(kApi, tx="OHJKHS-CFY4B-TIIKKB")
+    info = queryOrder(kApi, tx="OAQK32-22OKH-AWZPIT")
+    print (info)
+    if info is not None:
+        status, side, txID, price, volume, fees, tstamp = info
+        print("{},{},{},{}".format(tstamp, price, volume, fees))
+    info = queryOrder(kApi, tx="OQARAP-7NYHB-ZFICMW")
+    print (info)
+    if info is not None:
+        status, side, txID, price, volume, fees, tstamp = info
+        print("{},{},{},{}".format(tstamp, price, volume, fees))
+    info = queryOrder(kApi, tx="OHJKHS-CFY4B-TIIKKB")
+    print (info)
+    if info is not None:
+        status, side, txID, price, volume, fees, tstamp = info
+        print("{},{},{},{}".format(tstamp, price, volume, fees))

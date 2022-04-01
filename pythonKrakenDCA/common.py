@@ -4,53 +4,60 @@ import os
 import psycopg2
 from datetime import datetime
 import config
-from typing import List, Optional
+from typing import List
+
 
 MAX_RANGE = 8388608
 priceDecimals = {
     "xxbtzeur": 1,
     "xethzeur": 2,
     "atomeur": 2,
-    "adaeur": 3
+    "adaeur": 3,
+    "lunaeur": 2,
+    "mkreur": 1,
     }
 
 
 def processInputArgs(args: List[str]):
     if len(args) < 3:
-        print("missing input args <person> <symbol> (decimals)")
+        print("missing input args <person> <symbol>")
         sys.exit()
     person = args[1]
     symbol = args[2]
-    log_file, tx_file = buildFileNames(person, symbol)
-    decimals = 2
-    if len(args) > 3:
-        decimals = int(args[3])
-    return person, symbol, log_file, tx_file, decimals
+    logFile = buildTradeLogFileName(person, symbol)
+    txFile = buildTXFileName(person, symbol)
+    return person, symbol, logFile, txFile
+
+
+def buildBaseFolderName(person: str) -> str:
+    homeFolder = os.environ["HOME"]
+    baseFolder = os.path.join(homeFolder, "krakenDCA/logs/{}".format(person))
+    return baseFolder
 
 
 def buildTXFileName(person: str, symbol: str) -> str:
-    basePath = os.environ["HOME"]
-    txFile = os.path.join(basePath, "krakenDCA/logs/{}/{}_txs.txt".format(person, symbol))
+    baseFolder = buildBaseFolderName(person)
+    fileName = "{}_txs.txt".format(symbol)
+    txFile = os.path.join(baseFolder, fileName)
     return txFile
 
 
-def buildFileNames(person: str, symbol: str):
-    basePath = os.environ["HOME"]
-    logFile = os.path.join(basePath, "krakenDCA/logs/{}/{}.log".format(person, symbol))
-    txFile = os.path.join(basePath, "krakenDCA/logs/{}/{}_txs.txt".format(person, symbol))
-    return logFile, txFile
+def buildTradeLogFileName(person: str, symbol: str):
+    baseFolder = buildBaseFolderName(person)
+    logFileName = "trade.log"
+    logFile = os.path.join(baseFolder, logFileName)
+    return logFile
 
 
 def buildDCALogFileName(person: str) -> str:
-    basePath = os.environ["HOME"]
-    logFile = os.path.join(basePath, "krakenDCA/logs/{}/dca.log".format(person))
+    baseFolder = buildBaseFolderName(person)
+    logFile = os.path.join(baseFolder, "dca.log")
     return logFile
 
 
 def checkOrCreateFileName(fname):
     if os.path.isfile(fname) is False:
         open(fname, 'a').close()
-
 
 
 def getVolume(max_order: float, buy_price: float) -> float:
