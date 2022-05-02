@@ -36,7 +36,7 @@ monthlyResumeTemplate = "{symbol}: hai comprato {volume} ad un prezzo medio di {
 totalResumeTemplate = "{symbol}: {volume} pagati {purchase} € che ad oggi valgono circa {value} €, un ritorno del {roi} %"
 
 
-def main(person: str):
+def main(person: str, printIt: bool = False):
     if person in config.email is False:
         return
     api = krakenex.API()
@@ -88,6 +88,10 @@ def main(person: str):
         perSymbolTotalResume=totalResume
     )
 
+    if printIt is True:
+        print(emailContent)
+        return
+
     # sending mail
     context = ssl.create_default_context()
     port = 465  # For SSL
@@ -104,8 +108,11 @@ def main(person: str):
 
 if __name__ == "__main__":
     args = sys.argv
+    printIt = False
     if len(args) < 2:
         print("missing input args <person>")
         sys.exit()
+    if len(args) < 3 and args[2] == "print":
+        printIt = True
     person = args[1]
-    main(person)
+    main(person, printIt)
