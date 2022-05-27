@@ -1,9 +1,9 @@
-
 import time
 import sys
 import logging
 from datetime import datetime, timedelta
 from random import randint
+import ta
 
 import common
 import config
@@ -33,15 +33,25 @@ def main(person):
 def dcaBuy(txLogFile, kApi, expense, symbol, priceDecimals):
     interval = timedelta(days=1)
     (candles, lastPrice) = kraken.getLastCandles(kApi, symbol, interval)
-    wPrice = getWeightedAveragePrice(candles, config.window)
+    wPrice = getWeightedAveragePrice(candles, config.window.days)
     price = lastPrice
     if wPrice < lastPrice:
         price = wPrice
     volume = common.getVolume(expense, price)
     buyID = randint(0, common.MAX_RANGE - 1)
-    txid = kraken.addOrder(kApi, symbol, "buy", volume, price=price, price_decimals=priceDecimals,
-                           expiration=config.expiration, userref=buyID)
-    logging.info("limit order vol %f, price %f, buyID %d, txID %s", volume, price, buyID, txid)
+    txid = kraken.addOrder(
+        kApi,
+        symbol,
+        "buy",
+        volume,
+        price=price,
+        price_decimals=priceDecimals,
+        expiration=config.expiration,
+        userref=buyID,
+    )
+    logging.info(
+        "limit order vol %f, price %f, buyID %d, txID %s", volume, price, buyID, txid
+    )
     if txid is None:
         logging.error("buy order failed %f, %f", price, volume)
         return
@@ -50,12 +60,15 @@ def dcaBuy(txLogFile, kApi, expense, symbol, priceDecimals):
         txFile.write("\n")
 
 
-def getWeightedAveragePrice(candles, window):
-    limit = datetime.now() - window
-    idx = candles.index
-    cnd = candles[idx >= limit]
-    wg = (cnd["close"] * cnd["volume"]).sum() / cnd["volume"].sum()
-    return wg
+def getWeightedAveragePrice(candles, window: int):
+    wa = ta.volume.VolumeWeightedAveragePrice(
+        high=candles["high"],
+        low=candles["low"],
+        close=candles["close"],
+        volume=candles["volume"],
+        window=window,
+    )
+    return wa.volume_weighted_average_price()[-1]
 
 
 if __name__ == "__main__":
