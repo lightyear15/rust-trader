@@ -17,8 +17,8 @@ from pykrakenapi import KrakenAPI
 
 
 months = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
-hrSymbols = {"xxbtzeur": "btc", "xethzeur": "eth", "atomeur": "atom"}
-reportDecimals = {"xxbtzeur": 8, "xethzeur": 4, "atomeur": 4}
+hrSymbols = {"xxbtzeur": "btc", "xethzeur": "eth", "atomeur": "atom", "adaeur": "ada"}
+reportDecimals = {"xxbtzeur": 8, "xethzeur": 4, "atomeur": 4, "adaeur": 4}
 emailSubject = "cripto-resoconto del mese"
 messageTemplate = """ciao {person},
 anche questo {month} é passato.
