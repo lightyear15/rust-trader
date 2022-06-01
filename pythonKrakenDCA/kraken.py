@@ -21,12 +21,20 @@ def queryOrder(kApi: KrakenAPI, tx: str) -> Optional[Tuple[str, str, int, float,
             )
 
 
+def getPairDecimals(kApi: KrakenAPI, pair: str) -> Tuple[int, int]:
+    df = kApi.get_tradable_asset_pairs(pair=pair)
+    volDecimals = df["lot_decimals"][0]
+    priceDecimals = df["pair_decimals"][0]
+    return volDecimals, priceDecimals
+
+
 def addOrder(kApi: KrakenAPI, symbol, direction, volume, price=None,
-             price_decimals=None, expiration: timedelta = None, userref: int = None):
-    vol_str = "{:.8f}".format(volume)
+             volumeDecimals=None, priceDecimals=None,
+             expiration: timedelta = None, userref: int = None):
+    vol_str = "{:.{prec}f}".format(volume, prec=volumeDecimals)
     price_str = None
     if price is not None:
-        price_str = "{:.{prec}f}".format(price, prec=price_decimals)
+        price_str = "{:.{prec}f}".format(price, prec=priceDecimals)
     return addRawOrder(kApi, symbol, direction, vol_str, price_str, expiration, userref)
 
 
@@ -69,18 +77,19 @@ if __name__ == "__main__":
     # print(wg)
     # print(candles)
     # print(lastPrice)
-    info = queryOrder(kApi, tx="OAQK32-22OKH-AWZPIT")
-    print (info)
-    if info is not None:
-        status, side, txID, price, volume, fees, tstamp = info
-        print("{},{},{},{}".format(tstamp, price, volume, fees))
-    info = queryOrder(kApi, tx="OQARAP-7NYHB-ZFICMW")
-    print (info)
-    if info is not None:
-        status, side, txID, price, volume, fees, tstamp = info
-        print("{},{},{},{}".format(tstamp, price, volume, fees))
-    info = queryOrder(kApi, tx="OHJKHS-CFY4B-TIIKKB")
-    print (info)
-    if info is not None:
-        status, side, txID, price, volume, fees, tstamp = info
-        print("{},{},{},{}".format(tstamp, price, volume, fees))
+    # info = queryOrder(kApi, tx="OAQK32-22OKH-AWZPIT")
+    # print (info)
+    # if info is not None:
+        # status, side, txID, price, volume, fees, tstamp = info
+        # print("{},{},{},{}".format(tstamp, price, volume, fees))
+    # info = queryOrder(kApi, tx="OQARAP-7NYHB-ZFICMW")
+    # print (info)
+    # if info is not None:
+        # status, side, txID, price, volume, fees, tstamp = info
+        # print("{},{},{},{}".format(tstamp, price, volume, fees))
+    # info = queryOrder(kApi, tx="OHJKHS-CFY4B-TIIKKB")
+    # print (info)
+    # if info is not None:
+        # status, side, txID, price, volume, fees, tstamp = info
+        # print("{},{},{},{}".format(tstamp, price, volume, fees))
+    getPairDecimals(kApi=kApi, pair="XXBTZEUR")

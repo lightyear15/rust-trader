@@ -34,10 +34,11 @@ def main(txLogFile, person, symbol):
         return
     volume = common.getVolume(config.EUR, lastPrice)
     buyID = randint(0, common.MAX_RANGE - 1)
+    volDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=symbol)
     txid = kraken.addOrder(kApi, symbol, "buy",
                            volume,
                            price=lastPrice,
-                           price_decimals=common.priceDecimals[symbol],
+                           volumeDecimals=volDecimals, priceDecimals=priceDecimals,
                            expiration=config.expiration,
                            userref=buyID)
     logging.info("limit order vol %f, price %f, txID %s", volume, lastPrice, txid)

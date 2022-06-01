@@ -23,15 +23,15 @@ def main(person):
         logging.info("###### buyer for on {} {}".format(symbol, datetime.now()))
         txFile = common.buildTXFileName(person, symbol)
         common.checkOrCreateFileName(txFile)
-        priceDec = common.priceDecimals[symbol]
         expense = config.dca_table[person][symbol]
-        dcaBuy(txFile, kApi, expense, symbol, priceDec)
+        dcaBuy(txFile, kApi, expense, symbol)
         time.sleep(5)
     return
 
 
-def dcaBuy(txLogFile, kApi, expense, symbol, priceDecimals):
+def dcaBuy(txLogFile, kApi, expense, symbol):
     interval = timedelta(days=1)
+    volumeDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=symbol)
     (candles, lastPrice) = kraken.getLastCandles(kApi, symbol, interval)
     wPrice = getWeightedAveragePrice(candles, config.window.days)
     price = lastPrice
@@ -45,7 +45,7 @@ def dcaBuy(txLogFile, kApi, expense, symbol, priceDecimals):
         "buy",
         volume,
         price=price,
-        price_decimals=priceDecimals,
+        volumeDecimals=volumeDecimals, priceDecimals=priceDecimals,
         expiration=config.expiration,
         userref=buyID,
     )

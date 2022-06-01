@@ -9,14 +9,6 @@ from typing import List
 
 
 MAX_RANGE = 8388608
-priceDecimals = {
-    "xxbtzeur": 1,
-    "xethzeur": 2,
-    "atomeur": 2,
-    "adaeur": 3,
-    "lunaeur": 2,
-    "mkreur": 1,
-    }
 
 
 def dateParser(date: str) -> datetime:

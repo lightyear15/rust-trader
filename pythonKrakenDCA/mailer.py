@@ -18,7 +18,6 @@ from pykrakenapi import KrakenAPI
 
 months = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
 hrSymbols = {"xxbtzeur": "btc", "xethzeur": "eth", "atomeur": "atom", "adaeur": "ada"}
-reportDecimals = {"xxbtzeur": 8, "xethzeur": 4, "atomeur": 4, "adaeur": 4}
 emailSubject = "cripto-resoconto del mese"
 messageTemplate = """ciao {person},
 anche questo {month} é passato.
@@ -53,6 +52,7 @@ def main(person: str, printIt: bool = False):
         if ext != ".csv":
             continue
         # name is supposed to be the symbol
+        volDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=name)
         _, lastPrice = kraken.getLastCandles(kApi, symbol=name)
         df = pandas.read_csv(f, index_col="date", parse_dates=True, date_parser=common.dateParser)
         if df.empty is False:
@@ -61,9 +61,9 @@ def main(person: str, printIt: bool = False):
             value = volume * lastPrice
             totalResumeList.append(totalResumeTemplate.format(
                 symbol=hrSymbols[name],
-                volume=round(volume, reportDecimals[name]),
-                purchase=round(purchase, 2),
-                value=round(value, 2),
+                volume=round(volume, volDecimals),
+                purchase=round(purchase, priceDecimals),
+                value=round(value, priceDecimals),
                 roi=round((value - purchase) / purchase * 100, 2),
             )
             )
@@ -73,8 +73,8 @@ def main(person: str, printIt: bool = False):
                 price = (currentMonthDf["price"] * currentMonthDf["volume"]).sum() / volume
                 monthlyResumeList.append(monthlyResumeTemplate.format(
                     symbol=hrSymbols[name],
-                    volume=round(volume, reportDecimals[name]),
-                    price=round(price, 2),
+                    volume=round(volume, volDecimals),
+                    price=round(price, priceDecimals),
                     fee=round(currentMonthDf["fees"].sum(), 2),
                 )
                 )

@@ -1,4 +1,4 @@
-import sys
+volumeDecimals=None, import sys
 import logging
 from datetime import datetime
 
@@ -26,8 +26,10 @@ def main(txLogFile, dbConn, person, symbol):
             logging.info("%s buy closed order - %d", tx, txID)
             tpPrice, tpVolume = computeTakeProfit(person, price, volume)
             sellID = txID + common.MAX_RANGE
+            volDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=symbol)
             tpTxID = kraken.addOrder(kApi, symbol, "sell", tpVolume, price=tpPrice,
-                                     price_decimals=common.priceDecimals[symbol], userref=sellID)
+                                     volumeDecimals=volDecimals, priceDecimals=priceDecimals,
+                                     userref=sellID)
             common.recordTransaction(dbConn, symbol, tstamp, side, price, volume, txID, fees, 0)
             logging.info("taking profit -> %s", tpTxID)
             if tpTxID is not None:
