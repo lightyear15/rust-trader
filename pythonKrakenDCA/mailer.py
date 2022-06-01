@@ -54,7 +54,7 @@ def main(person: str, printIt: bool = False):
             continue
         # name is supposed to be the symbol
         _, lastPrice = kraken.getLastCandles(kApi, symbol=name)
-        df = pandas.read_csv(f, index_col="date", parse_dates=True)
+        df = pandas.read_csv(f, index_col="date", parse_dates=True, date_parser=common.dateParser)
         if df.empty is False:
             volume = df["volume"].sum()
             purchase = (df["price"] * df["volume"]).sum()
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     if len(args) < 2:
         print("missing input args <person>")
         sys.exit()
-    if len(args) < 3 and args[2] == "print":
+    if len(args) >= 3 and args[2] == "print":
         printIt = True
     person = args[1]
     main(person, printIt)

@@ -3,6 +3,7 @@ import sys
 import os
 import psycopg2
 from datetime import datetime
+import pandas
 import config
 from typing import List
 
@@ -16,6 +17,10 @@ priceDecimals = {
     "lunaeur": 2,
     "mkreur": 1,
     }
+
+
+def dateParser(date: str) -> datetime:
+    return pandas.to_datetime(date, format="%Y-%m-%d %H:%M:%S.%f")
 
 
 def processInputArgs(args: List[str]):
