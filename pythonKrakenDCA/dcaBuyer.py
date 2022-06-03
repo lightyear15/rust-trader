@@ -32,8 +32,11 @@ def main(person):
 def dcaBuy(txLogFile, kApi, expense, symbol):
     interval = timedelta(days=1)
     volumeDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=symbol)
+    time.sleep(2) # avoid rate limiter
     (candles, lastPrice) = kraken.getLastCandles(kApi, symbol, interval)
+    time.sleep(2) # avoid rate limiter
     wPrice = getWeightedAveragePrice(candles, config.window.days)
+    time.sleep(2) # avoid rate limiter
     price = lastPrice
     if wPrice < lastPrice:
         price = wPrice
