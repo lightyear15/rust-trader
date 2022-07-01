@@ -8,6 +8,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from email.policy import EmailPolicy
+import time
 
 import config
 import common
@@ -53,7 +54,9 @@ def main(person: str, printIt: bool = False):
             continue
         # name is supposed to be the symbol
         volDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=name)
+        time.sleep(5)
         _, lastPrice = kraken.getLastCandles(kApi, symbol=name)
+        time.sleep(5)
         df = pandas.read_csv(f, index_col="date", parse_dates=True, date_parser=common.dateParser)
         if df.empty is False:
             volume = df["volume"].sum()
@@ -78,7 +81,6 @@ def main(person: str, printIt: bool = False):
                     fee=round(currentMonthDf["fees"].sum(), 2),
                 )
                 )
-        time.sleep(2)
     totalResume = "\n".join(totalResumeList)
     monthlyResume = "\n".join(monthlyResumeList)
     emailContent = messageTemplate.format(

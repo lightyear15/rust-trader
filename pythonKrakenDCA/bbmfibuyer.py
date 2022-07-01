@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pandas
 import ta
 from random import randint
+import time
 
 import common
 import config
@@ -24,17 +25,19 @@ def main(txLogFile, person, symbol):
     (candles, lastPrice) = kraken.getLastCandles(kApi, symbol, interval)
     mfi = ta.volume.MFIIndicator(high=candles["high"], low=candles["low"], close=candles["close"], volume=candles["volume"])
     bb = ta.volatility.BollingerBands(close=candles[ "close" ])
-    lastMfi = mfi.money_flow_index()[-1]
-    bbLowIndicator = bb.bollinger_lband_indicator()[-1]
-    if lastMfi >= MFI_THRE:
-        logging.info("lastMfi %f @ %f, quitting", lastMfi, lastPrice)
+    # print(candles["close"][-10:], bb.bollinger_lband_indicator()[-10:], mfi.money_flow_index()[-10:])
+    mfiIndicator = mfi.money_flow_index()[-2:-1]
+    if any(map(lambda x: x >= MFI_THRE, mfiIndicator)):
+        logging.info("mfiIndicator %f @ %f, quitting", mfiIndicator, lastPrice)
         return
+    bbLowIndicator = bb.bollinger_lband_indicator()[-1]
     if bbLowIndicator == 0:
         logging.info("bbLowIndicator %d @ %f, quitting", bbLowIndicator, lastPrice)
         return
     volume = common.getVolume(config.EUR, lastPrice)
     buyID = randint(0, common.MAX_RANGE - 1)
     volDecimals, priceDecimals = kraken.getPairDecimals(kApi=kApi, pair=symbol)
+    time.sleep(5)
     txid = kraken.addOrder(kApi, symbol, "buy",
                            volume,
                            price=lastPrice,
