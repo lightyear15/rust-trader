@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 #[derive(Debug, serde::Deserialize, Clone)]
 pub struct ExchangeSettings {
@@ -35,7 +36,7 @@ impl Settings {
         println!("loading config from {}", config_file);
         let mut config_reader = config::Config::default();
         config_reader.merge(config::File::with_name(config_file).required(false))?;
-        let settings = config_reader.try_into()?;
+        let settings = config_reader.try_deserialize()?;
         Ok(settings)
     }
 }
