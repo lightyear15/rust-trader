@@ -1,0 +1,9 @@
+---
+version: "3"
+services:
+  trader:
+    image: lightyear15/rust-trader:0.1.1
+    container_name: trader
+    volumes:
+      - ${ROOT}/rust-trader:/root
+    entrypoint: ["/usr/bin/trader", "live"]

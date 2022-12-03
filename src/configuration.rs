@@ -34,10 +34,10 @@ pub struct Settings {
 impl Settings {
     pub fn get_configuration(config_file: &str) -> Result<Self, config::ConfigError> {
         println!("loading config from {}", config_file);
-        let mut config_reader = config::Config::default();
-        config_reader.merge(config::File::with_name(config_file).required(false))?;
-        let settings = config_reader.try_into()?;
-        Ok(settings)
+        let builder = config::Config::builder()
+            .add_source(config::File::new(config_file, config::FileFormat::Toml));
+        let cfg = builder.build().expect("config builder build went wrong");
+        cfg.try_deserialize()
     }
 }
 

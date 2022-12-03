@@ -6,7 +6,7 @@ use crate::strategies::Action;
 use crate::strategies::SpotSinglePairStrategy;
 use crate::symbol::Symbol;
 use crate::{storage, utils, wallets};
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use std::collections::HashMap;
 
 const STARTING_BALANCE: f64 = 10000.0;
@@ -18,8 +18,8 @@ pub async fn backtest_spot_singlepair(
     end: NaiveDate,
 ) -> Result<(Statistics, wallets::SpotWallet), Error> {
     // set up
-    let end_t = end.and_hms(0, 0, 0);
-    let start_t = start.and_hms(0, 0, 0);
+    let end_t = end.and_time(NaiveTime::default());
+    let start_t = start.and_time(NaiveTime::default());
     let mut start_time = start_t;
     let depth = strategy.get_candles_history_size();
     let mut tstamp = start_time + (*(strategy.time_frame()) * (depth as i32));

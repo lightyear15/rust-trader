@@ -136,7 +136,8 @@ impl From<Candle> for candles::Candle {
             high: cnd.high.parse::<f64>().expect("in cnd.high"),
             close: cnd.close.parse::<f64>().expect("in cnd.close"),
             volume: cnd.volume.parse::<f64>().expect("in cnd.volume"),
-            tstamp: NaiveDateTime::from_timestamp((cnd.tstamp_open / 1000) as i64, 0),
+            tstamp: NaiveDateTime::from_timestamp_opt((cnd.tstamp_open / 1000) as i64, 0)
+                .expect("in From<Candle> for candles::Candle"),
             tframe: Duration::milliseconds((cnd.tstamp_close - cnd.tstamp_open) as i64 + 1),
         }
     }
@@ -213,8 +214,10 @@ impl LiveCandle {
 }
 impl From<LiveCandle> for candles::Candle {
     fn from(msg: LiveCandle) -> Self {
-        let start = NaiveDateTime::from_timestamp((msg.candle.tstamp_open / 1000) as i64, 0);
-        let stop = NaiveDateTime::from_timestamp((msg.candle.tstamp_close / 1000) as i64, 0);
+        let start = NaiveDateTime::from_timestamp_opt((msg.candle.tstamp_open / 1000) as i64, 0)
+            .expect("From<LiveCandle> for candles::Candle, start");
+        let stop = NaiveDateTime::from_timestamp_opt((msg.candle.tstamp_close / 1000) as i64, 0)
+            .expect("From<LiveCandle> for candles::Candle, stop");
         let dur = stop - start + Duration::milliseconds(1);
         Self {
             open: msg.candle.open.parse::<f64>().expect("in cnd.open"),
@@ -284,7 +287,8 @@ impl TryFrom<LiveOrderUpdate> for orders::Transaction {
         let tot_quantity = msg.cumulative_quantity.parse::<f64>().expect("in cumulative_quantity");
         let tot_price = msg.cumulative_price.parse::<f64>().expect("in cumulative_price");
         let fees = msg.commission_amount.parse::<f64>().expect("in commission_asset");
-        let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
+        let tstamp = NaiveDateTime::from_timestamp_opt((msg.tstamp / 1000) as i64, 0)
+            .expect("TryFrom<LiveOrderUpdate> for orders::Transaction, tstamp");
         let s = Self {
             tstamp,
             symbol: msg.symbol,
@@ -311,7 +315,8 @@ impl TryFrom<LiveOrderUpdate> for orders::Order {
         } else {
             return Err(String::from("no order IDs"));
         };
-        let tstamp = NaiveDateTime::from_timestamp((msg.tstamp / 1000) as i64, 0);
+        let tstamp = NaiveDateTime::from_timestamp_opt((msg.tstamp / 1000) as i64, 0)
+            .expect("TryFrom<LiveOrderUpdate> for orders::Order, tstamp");
         let order = orders::Order {
             tstamp: Some(tstamp),
             volume: msg.order_quantity.parse::<f64>().expect("in msg.order_quantity"),

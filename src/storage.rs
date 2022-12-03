@@ -190,7 +190,7 @@ impl Candles {
 
 fn row_to_candle(row: row::Row, tframe: &chrono::Duration) -> candles::Candle {
     let mut cnd = candles::Candle {
-        tstamp: NaiveDateTime::from_timestamp(0, 0),
+        tstamp: NaiveDateTime::default(),
         tframe: *tframe,
         open: 0.0,
         low: 0.0,
@@ -273,6 +273,7 @@ impl Transactions {
                 match elem {
                     Ok(connection) => {
                         error!("connection {:?}", connection.await);
+                        std::process::exit(1);
                     }
                     Err(TryRecvError::Empty) => {
                         actix_rt::time::delay_for(std::time::Duration::from_secs(60 * 5)).await;

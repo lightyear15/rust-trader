@@ -10,9 +10,9 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use ta::indicators::{BollingerBands, MoneyFlowIndex};
 use ta::{DataItem, Next, Period, Reset};
+use log::error;
 
 const CAPITAL: f64 = 0.1;
-const GAIN: f64 = 1.01;
 
 #[derive(Clone)]
 pub struct BBBMfiScalp {
@@ -20,6 +20,7 @@ pub struct BBBMfiScalp {
     bbb: BollingerBands,
     max_outstanding_orders : usize,
     starting_time: chrono::NaiveDateTime,
+    take_profit: f64,
 
     exchange: String,
     sym: Symbol,
@@ -48,11 +49,22 @@ impl BBBMfiScalp {
             .expect("no max_outstanding_orders key")
             .parse::<usize>()
             .expect("max_outstanding_orders must be usize");
+        let take_profit_perc = settings
+            .get("take_profit")
+            .expect("no take_profit key")
+            .parse::<usize>()
+            .expect("take_profit must be usize");
+        if take_profit_perc <=0 || take_profit_perc > 100 {
+            error!("take_profit must be (0,100]");
+            std::process::exit(1);
+        }
+        let take_profit: f64 = take_profit_perc as f64 / 100.0;
         Self {
             bbb: BollingerBands::new(bbb_size, bbb_multiplier).unwrap(),
             mfi: MoneyFlowIndex::new(mfi_period).unwrap(),
             max_outstanding_orders, 
-            starting_time: NaiveDateTime::from_timestamp(0, 0),
+            starting_time: NaiveDateTime::default(),
+            take_profit,
 
             exchange,
             sym,
@@ -119,8 +131,8 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
 
     fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action {
         if matches!(tx.side, Side::Buy) {
-            let price = tx.avg_price * GAIN;
-            let volume = tx.volume / GAIN;
+            let price = tx.avg_price * (1.0 + self.take_profit);
+            let volume = tx.volume / (1.0 + self.take_profit);
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
             order.symbol = self.sym.clone();
