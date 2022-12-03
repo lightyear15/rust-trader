@@ -6,7 +6,7 @@ use crate::strategies::Action;
 use crate::strategies::SpotSinglePairStrategy;
 use crate::symbol::Symbol;
 use crate::{storage, utils, wallets};
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use std::collections::HashMap;
 
 const STARTING_BALANCE: f64 = 10000.0;
@@ -101,7 +101,7 @@ pub async fn backtest_spot_singlepair(
                 } else {
                     Transaction::default()
                 };
-                let frst_tstamp = next_tx.as_ref().map(|t| t.tstamp).unwrap_or(chrono::naive::MAX_DATETIME);
+                let frst_tstamp = next_tx.as_ref().map(|t| t.tstamp).unwrap_or(NaiveDateTime::MAX);
                 if frst_tstamp > tx.tstamp {
                     next_tx = Some(tx);
                 }

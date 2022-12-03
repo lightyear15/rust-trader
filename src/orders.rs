@@ -95,7 +95,7 @@ impl Default for Transaction {
             volume: 0.0,
             fees: 0.0,
             fees_asset: String::new(),
-            tstamp: chrono::naive::MAX_DATETIME, // the transaction that never happened it's in the future
+            tstamp: NaiveDateTime::MAX, // the transaction that never happened it's in the future
             order: Order::default(),
         }
     }

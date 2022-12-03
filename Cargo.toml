@@ -28,8 +28,7 @@ actix-codec = {version = "0.3"}
 actix = {version = "0"}
 actix-web-actors = {version = "3"}
 awc = {version = "2", features = ["openssl"]}
-openssl = {version = "0", features = ["vendored"]}
-openssl-sys = {version = "0"}
+openssl = {version = "0"}
 openssl-probe = {version = "0"}
 progress = {version = "0"}
 ta = {version = "0"}
