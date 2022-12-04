@@ -49,16 +49,15 @@ impl BBBMfiScalp {
             .expect("no max_outstanding_orders key")
             .parse::<usize>()
             .expect("max_outstanding_orders must be usize");
-        let take_profit_perc = settings
+        let take_profit = settings
             .get("take_profit")
             .expect("no take_profit key")
-            .parse::<usize>()
-            .expect("take_profit must be usize");
-        if take_profit_perc <=0 || take_profit_perc > 100 {
-            error!("take_profit must be (0,100]");
+            .parse::<f64>()
+            .expect("take_profit must be f64");
+        if take_profit < 1.0 {
+            error!("take_profit must be > 1.0");
             std::process::exit(1);
         }
-        let take_profit: f64 = take_profit_perc as f64 / 100.0;
         Self {
             bbb: BollingerBands::new(bbb_size, bbb_multiplier).unwrap(),
             mfi: MoneyFlowIndex::new(mfi_period).unwrap(),
@@ -131,8 +130,8 @@ impl SpotSinglePairStrategy for BBBMfiScalp {
 
     fn on_new_transaction(&mut self, _outstanding_orders: &[Order], tx: &Transaction) -> Action {
         if matches!(tx.side, Side::Buy) {
-            let price = tx.avg_price * (1.0 + self.take_profit);
-            let volume = tx.volume / (1.0 + self.take_profit);
+            let price = tx.avg_price * self.take_profit;
+            let volume = tx.volume / self.take_profit;
             let mut order = Order::new();
             order.exchange = self.exchange.clone();
             order.symbol = self.sym.clone();
