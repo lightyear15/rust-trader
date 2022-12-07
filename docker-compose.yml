@@ -7,3 +7,4 @@ services:
     volumes:
       - ${ROOT}/rust-trader:/root
     entrypoint: ["/usr/bin/trader", "live"]
+    restart: unless-stopped
