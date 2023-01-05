@@ -24,7 +24,8 @@ left join s on b.id = s.reference and b.exchange = s.exchange and b.symbol = s.s
 
 
 def lastReport(dbCursor):
-    query = BuySellMatchDBQuery + """select
+    query = BuySellMatchDBQuery + """,
+lastI as (select
 i.exchange, i.symbol,
 (case when sellTstamp is null then buyTstamp else sellTstamp end) as tstamp,
 buyFees + coalesce(sellFees, 0.0) as fees,
@@ -33,7 +34,10 @@ buyVolume - sellVolume as volume,
 sellPrice * sellVolume - buyPrice * buyVolume + sellPrice*(buyVolume - sellVolume) as profit,
 sellTstamp - buyTstamp as elapsed
 from i
-where extract(year from i.buyTstamp) = %s and extract(month from i.buyTstamp) = %s
+)
+select exchange, symbol, tstamp, price, profit, elapsed
+from lastI
+where extract(year from tstamp) = %s and extract(month from tstamp) = %s
 order by tstamp desc
 """
     entries = []
@@ -44,11 +48,9 @@ order by tstamp desc
                 {"exchange": row[0],
                     "symbol": row[1],
                     "tstamp": row[2],
-                    "fees": row[3],
-                    "price": row[4],
-                    "volume": row[5],
-                    "profit": row[6],
-                    "elapsed": row[7],
+                    "price": row[3],
+                    "profit": row[4],
+                    "elapsed": row[5],
                  })
     completed = filter(lambda entry: entry["profit"] is not None, entries)
     pending = filter(lambda entry: entry["profit"] is None, entries)
