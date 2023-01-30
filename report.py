@@ -94,16 +94,17 @@ order by year, month, exchange
     for k, group in itertools.groupby(entries, key=lambda e: e["date"]):
         groupedElement = {"date": k}
         for g in group:
-            groupedElement[g["exchange"]] = {"profit": g["profit"], "elapsed": g["elapsed"], "counter": g["counter"]}
+            groupedElement[g["exchange"]] = {"profit": g["profit"], "elapsed": g["elapsed"], "counter": g["counter"], "fees": g["fees"]}
         grouped.append(groupedElement)
-    for g in grouped:
-        print(g["date"])
-        if "binance" in g:
-            print("\t", "binance:", g["binance"]["profit"], "\t", g["binance"]["counter"], "\t", g["binance"]["elapsed"])
-        if "kraken" in g:
-            print("\t", "kraken:", g["kraken"]["profit"], "\t", g["kraken"]["counter"], "\t", g["kraken"]["elapsed"])
 
-        # print(, int(e["month"])), "\t", e["exchange"], "\t", e["profit"])
+    for entry in grouped:
+        print(entry["date"])
+        for exchange in ["binance", "kraken"]:
+            if exchange not in entry:
+                continue
+            data = entry[exchange]
+            resume = "\t {}:\t{:.2f}\t{:.2f}\t{}\t{}".format(exchange, data["profit"], data["fees"], data["counter"], data["elapsed"])
+            print(resume)
 
 
 reportFunction = {
