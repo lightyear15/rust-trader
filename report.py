@@ -11,6 +11,7 @@ class Report(str, Enum):
     Binance = "binance"
     Kraken = "kraken"
     Monthly = "monthly"
+    Coinly = "coin"
 
 
 BuySellMatchDBQuery = """with b as (select * from transactions where side = 'Buy'),
@@ -97,19 +98,47 @@ order by year, month, exchange
             groupedElement[g["exchange"]] = {"profit": g["profit"], "elapsed": g["elapsed"], "counter": g["counter"], "fees": g["fees"]}
         grouped.append(groupedElement)
 
+    exchanges = ["binance", "kraken"]
+    total = dict.fromkeys(exchanges, (0.0, 0.0, 0))
     for entry in grouped:
         print(entry["date"])
-        for exchange in ["binance", "kraken"]:
+        for exchange in exchanges:
             if exchange not in entry:
                 continue
             data = entry[exchange]
-            resume = "\t {}:\t{:.2f}\t{:.2f}\t{}\t{}".format(exchange, data["profit"], data["fees"], data["counter"], data["elapsed"])
+            resume = "\t {}:\t{:.2f}\t{:.4f}\t{}\t{}".format(exchange, data["profit"], data["fees"], data["counter"], data["elapsed"])
+            (profit, fees, counter) = total[exchange]
+            total[exchange] = (profit + float(data["profit"]), fees + float(data["fees"]), counter + int(data["counter"]))
             print(resume)
+    print("total")
+    for exchange in exchanges:
+        (profit, fees, counter) = total[exchange]
+        resume = "\t {}:\t{:.2f}\t{:.4f}\t{}".format(exchange, profit, fees, counter)
+        print(resume)
+
+
+def coinlyReport(dbCursor):
+    query = BuySellMatchDBQuery + """select symbol,
+sum(buyVolume - sellVolume) as volume,
+count(*) as counter
+from i
+where sellTstamp is not null
+group by symbol
+"""
+    entries = []
+    dbCursor.execute(query)
+    rows = dbCursor.fetchall()
+    for row in rows:
+        print("{}: \t{:.8f} {}".format(row[0], row[1], row[2]))
+    return()
+
+
 
 
 reportFunction = {
         Report.Last: lastReport,
         Report.Monthly: monthlyReport,
+        Report.Coinly: coinlyReport,
 }
 
 
