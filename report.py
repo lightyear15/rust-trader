@@ -4,6 +4,7 @@ from enum import Enum
 import itertools
 import psycopg2
 import config
+from currency_converter import CurrencyConverter
 
 
 class Report(str, Enum):
@@ -12,7 +13,16 @@ class Report(str, Enum):
     Kraken = "kraken"
     Monthly = "monthly"
     Coinly = "coin"
+    Tax = "tax"
 
+
+symbolMaps = {
+        "xxbtzeur": "btc", "BTCBUSD": "btc",
+        "WBTCBUSD": "wbtc", "wbtceur": "wbtc",
+        "ETHBUSD": "eth", "xethzeur": "eth",
+        "MKRBUSD": "mkr", "mkreur": "mkr",
+        "BETHBUSD": "beth",
+}
 
 BuySellMatchDBQuery = """with b as (select * from transactions where side = 'Buy'),
 s as (select * from transactions where side = 'Sell'),
@@ -22,6 +32,12 @@ from b
 left join s on b.id = s.reference and b.exchange = s.exchange and b.symbol = s.symbol and b.fees_asset = s.fees_asset
 )
 """
+
+
+def mapCoin(coin):
+    if coin in symbolMaps.keys():
+        return symbolMaps[coin]
+    return coin
 
 
 def lastReport(dbCursor):
@@ -125,7 +141,6 @@ from i
 where sellTstamp is not null
 group by symbol
 """
-    entries = []
     dbCursor.execute(query)
     rows = dbCursor.fetchall()
     for row in rows:
@@ -133,22 +148,69 @@ group by symbol
     return()
 
 
+def taxReport(dbCursor):
+    c = CurrencyConverter(fallback_on_missing_rate=True)
+    year = datetime.today().year - 1
+    query = """
+select symbol, side, tstamp, price, volume
+from transactions
+where tstamp between '%(year)s-01-01' and '%(year)s-12-31'
+    """
+    dbCursor.execute(query, {"year": year})
+    rows = dbCursor.fetchall()
+    operations = {}
+    defaultEntry = {"buyVolume": 0.0, "sellVolume": 0.0, "buyPrice": 0.0, "sellPrice": 0.0}
+    for row in rows:
+        symbol = row[0]
+        side = row[1]
+        tstamp = datetime.fromisoformat(str(row[2]))
+        price = row[3]
+        volume = row[4]
+        coin = mapCoin(row[0])
+
+        if coin not in operations.keys():
+            operations[coin] = defaultEntry
+        op = operations[coin].copy()
+        if symbol.endswith("USD"):
+            price = c.convert(price, "USD", "EUR", date=tstamp.date())
+        if side == "Sell":
+            totVolume = op["sellVolume"]
+            totPrice = op["sellPrice"]
+            newVolume = totVolume + volume
+            newPrice = (totPrice * totVolume + price * volume) / newVolume
+            op["sellVolume"] = newVolume
+            op["sellPrice"] = newPrice
+        if side == "Buy":
+            totVolume = op["buyVolume"]
+            totPrice = op["buyPrice"]
+            newVolume = totVolume + volume
+            newPrice = (totPrice * totVolume + price * volume) / newVolume
+            op["buyVolume"] = newVolume
+            op["buyPrice"] = newPrice
+        operations[coin] = op
+    for (key, op) in operations.items():
+        sellValue = op["sellVolume"] * op["sellPrice"]
+        buyValue = op["buyVolume"] * op["buyPrice"]
+        # print(key, op)
+        print(key, "buyValue", buyValue, "sellValue", sellValue, "dif", sellValue - buyValue)
+    return()
 
 
 reportFunction = {
         Report.Last: lastReport,
         Report.Monthly: monthlyReport,
         Report.Coinly: coinlyReport,
+        Report.Tax: taxReport,
 }
 
 
 def main(cmd: Report):
     connData = config.DBData
     dbConn = psycopg2.connect(database=connData["database"],
-                           user=connData["username"],
-                           password=connData["password"],
-                           host=connData["hostname"],
-                           port=connData["port"])
+                              user=connData["username"],
+                              password=connData["password"],
+                              host=connData["hostname"],
+                              port=connData["port"])
     with dbConn.cursor() as crs:
         reportFunction[cmd](crs)
     dbConn.close()
@@ -160,5 +222,3 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         comm = Report(sys.argv[1])
     main(comm)
-
-
